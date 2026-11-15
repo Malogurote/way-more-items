@@ -324,14 +324,7 @@ final class WmiNotesPanel {
                         }, null));
             }
         }
-        GuiLayout.Rect hudR = inScreen ? o.frame.place("notes.hud", 20, 18) : null;
-        if (hudR != null) {
-            o.buttons.addSmallButton(g, font, hudR.x(), hudR.y(), hudR.w(), hudR.h(), "HUD",
-                    WmiText.s("wmi.notes.hud_tip"), mouseX, mouseY, settings.hudPostItPinned, () -> {
-                        settings.hudPostItPinned = !settings.hudPostItPinned;
-                        settings.save();
-                    });
-        }
+        // Plus de bouton « HUD » dans l'inventaire : le réglage est dans l'onglet HUD de « Paramètres »
     }
 
     /**

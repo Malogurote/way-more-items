@@ -67,7 +67,7 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
         sliders.clear();
 
         boolean custom = th.isCustom();
-        int rows = tab == 2 ? 5 : tab == 1 ? 7 : (custom ? 13 : 10);
+        int rows = tab == 3 ? 1 : tab == 2 ? 4 : tab == 1 ? 7 : (custom ? 13 : 10);
         int boxH = 30 + 22 + rows * ROW_H + 30;
         int x0 = (width - BOX_W) / 2;
         int y0 = (height - boxH) / 2;
@@ -77,11 +77,14 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
         int y = y0 + 26 + 22;
 
         // Onglets
-        button(g, o, x0 + 10, y0 + 24, 64, 15, WmiText.s("wmi.settings.tab.general"), tab == 0, mouseX, mouseY, () -> tab = 0, null);
-        button(g, o, x0 + 78, y0 + 24, 64, 15, WmiText.s("wmi.settings.tab.widget"), tab == 1, mouseX, mouseY, () -> tab = 1, null);
-        button(g, o, x0 + 146, y0 + 24, 64, 15, WmiText.s("wmi.settings.tab.notes"), tab == 2, mouseX, mouseY, () -> tab = 2, null);
+        button(g, o, x0 + 10, y0 + 24, 60, 15, WmiText.s("wmi.settings.tab.general"), tab == 0, mouseX, mouseY, () -> tab = 0, null);
+        button(g, o, x0 + 74, y0 + 24, 60, 15, WmiText.s("wmi.settings.tab.widget"), tab == 1, mouseX, mouseY, () -> tab = 1, null);
+        button(g, o, x0 + 138, y0 + 24, 60, 15, WmiText.s("wmi.settings.tab.notes"), tab == 2, mouseX, mouseY, () -> tab = 2, null);
+        button(g, o, x0 + 202, y0 + 24, 60, 15, WmiText.s("wmi.settings.tab.hud"), tab == 3, mouseX, mouseY, () -> tab = 3, null);
 
-        if (tab == 2) {
+        if (tab == 3) {
+            renderHudTab(g, o, x0, y, mouseX, mouseY);
+        } else if (tab == 2) {
             renderNotesTab(g, o, th, x0, y, mouseX, mouseY);
         } else if (tab == 1) {
             renderWidgetTab(g, o, th, x0, y, mouseX, mouseY);
@@ -94,8 +97,8 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
         button(g, o, x0 + (BOX_W - closeW) / 2, y0 + boxH - 24, closeW, 16, WmiText.s("wmi.settings.close"), false, mouseX, mouseY, this::onClose, null);
     }
 
-    /** Onglet Notes : affichage hors inventaire et profondeur des arbres d'ingrédients. */
-    private void renderNotesTab(GuiGraphicsExtractor g, WmiOverlay o, WmiTheme th, int x0, int y, int mouseX, int mouseY) {
+    /** Onglet HUD : éléments de WMI affichés sur l'écran de jeu, hors inventaire. */
+    private void renderHudTab(GuiGraphicsExtractor g, WmiOverlay o, int x0, int y, int mouseX, int mouseY) {
         WmiSettings cfg = o.settings();
         int labelX = x0 + 10;
         int ctrlX = x0 + 138;
@@ -103,7 +106,14 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
         row(g, o, WmiText.s("wmi.settings.notes_hud"), labelX, y);
         toggle(g, o, ctrlX, y, ctrlW, WmiText.s("wmi.settings.notes_hud." + (cfg.hudNotesPinned() ? "on" : "off")), cfg.hudNotesPinned(), mouseX, mouseY,
                 () -> cfg.setHudNotesPinned(!cfg.hudNotesPinned()));
-        y += ROW_H;
+    }
+
+    /** Onglet Notes : notes vides et profondeur des arbres d'ingrédients. */
+    private void renderNotesTab(GuiGraphicsExtractor g, WmiOverlay o, WmiTheme th, int x0, int y, int mouseX, int mouseY) {
+        WmiSettings cfg = o.settings();
+        int labelX = x0 + 10;
+        int ctrlX = x0 + 138;
+        int ctrlW = BOX_W - 148;
         row(g, o, WmiText.s("wmi.settings.notes_empty"), labelX, y);
         toggle(g, o, ctrlX, y, ctrlW, WmiText.s("wmi.settings.notes_empty." + (cfg.notesShowEmpty() ? "on" : "off")), cfg.notesShowEmpty(), mouseX, mouseY,
                 () -> cfg.setNotesShowEmpty(!cfg.notesShowEmpty()));
