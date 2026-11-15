@@ -1,0 +1,135 @@
+// Way More Items (WMI) : projet autonome, utilisable seul ou avec n'importe quels mods (comme JEI ou NEI).
+// Aucune dépendance envers un autre mod (JEI seulement en compileOnly, facultatif).
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.148'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+neoForge {
+    version = project.neo_version
+
+    runs {
+        client {
+            client()
+            // Dossier de jeu : propriété Gradle « wmiGameDir » (gradle.properties de l'utilisateur), « run » par défaut.
+            gameDirectory = file(providers.gradleProperty('wmiGameDir').getOrElse('run'))
+            if (project.hasProperty('quickPlay')) {
+                programArgument '--quickPlaySingleplayer'
+                programArgument project.property('quickPlay').toString()
+            }
+        }
+        configureEach {
+            logLevel = org.slf4j.event.Level.INFO
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+// Interface publique de JEI (MIT), pour compiler seulement : jamais embarquée. Le greffon WMI pour JEI
+// (waymoreitems.compat.jei) n'est chargé que si JEI est installé.
+repositories {
+    maven {
+        url = 'https://maven.blamejared.com'
+        content {
+            includeGroup 'mezz.jei'
+        }
+    }
+}
+
+dependencies {
+    compileOnly "mezz.jei:jei-26.3-common-api:31.17.0.113"
+    compileOnly "mezz.jei:jei-26.3-neoforge-api:31.17.0.113"
+}
+
+var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
+    var replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version            : neo_version,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from "src/main/templates"
+    into "build/generated/sources/modMetadata"
+}
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
+
+// Tests du noyau de Way More Items en Java pur (sans bibliothèque de test) : gradle wmiTests
+tasks.register('wmiTests', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'waymoreitems.core.WmiTests'
+}
+
+// Cloisonnement : la compilation échoue si le code ou les ressources de WMI contiennent un renvoi interdit
+// (propriété Gradle « wmiForbiddenRefs », mots séparés par des virgules, facultative), ou si le noyau cite Minecraft.
+// WMI doit rester utilisable seul.
+tasks.register('verifierCloisonnement') {
+    def dossiers = [file('src/main'), file('src/test')]
+    def dossiersNoyau = [file('src/main/java/waymoreitems/core'), file('src/main/java/waymoreitems/api')]
+    def interdits = providers.gradleProperty('wmiForbiddenRefs').getOrElse('')
+            .split(',').collect { it.trim().toLowerCase() }.findAll { !it.isEmpty() }
+    inputs.files(dossiers)
+    inputs.property('interdits', interdits)
+    doLast {
+        def fautes = []
+        dossiers.each { d ->
+            if (d.exists() && !interdits.isEmpty()) {
+                d.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+                    if (f.name.endsWith('.java') || f.name.endsWith('.json') || f.name.endsWith('.toml') || f.name.endsWith('.cfg')) {
+                        f.eachLine('UTF-8') { line, n ->
+                            def bas = line.toLowerCase()
+                            if (interdits.any { bas.contains(it) }) {
+                                fautes << "${f.path}:${n}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (!fautes.isEmpty()) {
+            throw new GradleException('WMI ne doit pas renvoyer a une autre suite de mods : ' + fautes.join(', '))
+        }
+        // Noyau et API en Java pur : aucun renvoi (import ou nom qualifié) à Minecraft, NeoForge ou Mojang
+        def fautesNoyau = []
+        dossiersNoyau.each { d ->
+            if (d.exists()) {
+                d.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+                    if (f.name.endsWith('.java')) {
+                        f.eachLine('UTF-8') { line, n ->
+                            if (line =~ /\b(net\.minecraft|net\.neoforged|com\.mojang)\./) {
+                                fautesNoyau << "${f.path}:${n}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (!fautesNoyau.isEmpty()) {
+            throw new GradleException('Le noyau et l API de WMI doivent rester en Java pur : ' + fautesNoyau.join(', '))
+        }
+    }
+}
+tasks.named('compileJava') { dependsOn 'verifierCloisonnement' }

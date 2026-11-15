@@ -1,0 +1,52 @@
+name: Problem
+description: WMI misbehaves, shows something wrong or makes the game crash.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. One problem per issue, please.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem?
+      options:
+        - Something works the wrong way
+        - Display issue (layout, text, textures)
+        - Game crash
+        - Server crash
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: Describe what you see, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How to get it
+      description: The shortest way you found to make it happen again. Screenshots are welcome.
+      placeholder: |
+        1. Open a chest
+        2. Click on ...
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup
+      description: Versions, and the other mods you play with if they might be involved.
+      value: |
+        Minecraft:
+        NeoForge:
+        WMI:
+        Other mods:
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log or crash report
+      description: >-
+        Attach `logs/latest.log`, or for a crash the newest file in `crash-reports`.
+        You can drag the file here or paste a link to it.

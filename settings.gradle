@@ -1,0 +1,8 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+    }
+}
+
+// Way More Items : projet autonome.
+rootProject.name = 'way-more-items'

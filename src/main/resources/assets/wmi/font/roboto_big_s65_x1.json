@@ -1,0 +1,15 @@
+{
+  "providers": [
+    {
+      "type": "ttf",
+      "file": "wmi:roboto.ttf",
+      "size": 8.45,
+      "oversample": 1.0,
+      "shift": [0.0, 0.65]
+    },
+    {
+      "type": "reference",
+      "id": "minecraft:include/default"
+    }
+  ]
+}

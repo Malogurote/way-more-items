@@ -1,0 +1,20 @@
+name: Idea
+description: A feature or a change you would like to see in WMI.
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What should WMI do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it would help
+      description: The situation where you miss it while playing.
+  - type: textarea
+    id: elsewhere
+    attributes:
+      label: Seen elsewhere?
+      description: If another mod already does something like this, tell me which one and how it feels.

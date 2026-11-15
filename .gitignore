@@ -1,0 +1,23 @@
+# Build and run output
+build/
+out/
+run/
+.gradle/
+*.class
+*.log
+crash-reports/
+
+# Archives and binaries
+*.jar
+*.zip
+
+# IDE and OS files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Python caches
+__pycache__/
+*.pyc
