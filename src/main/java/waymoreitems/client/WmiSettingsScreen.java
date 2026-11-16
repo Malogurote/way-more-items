@@ -22,7 +22,6 @@ import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.client.settings.KeyModifier;
 import org.jspecify.annotations.Nullable;
 import waymoreitems.core.CatalogItem;
-import waymoreitems.core.RecipeIndex;
 import waymoreitems.core.ThemePalette;
 
 /**
@@ -111,7 +110,7 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
     // ==================== MODÈLE DES RÉGLAGES ====================
 
     /** Commande d'une ligne. */
-    private sealed interface Control permits Toggle, Choice, Slider, KeyCtl, Button, Stepper, ColorPick, None {
+    private sealed interface Control permits Toggle, Choice, Slider, KeyCtl, Button, Stepper, ColorPick {
     }
 
     private record Toggle(boolean value, Consumer<Boolean> set) implements Control {
@@ -136,9 +135,6 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
     }
 
     private record ColorPick() implements Control {
-    }
-
-    private record None() implements Control {
     }
 
     /**
@@ -218,6 +214,8 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
                 () -> o.setVanillaBookEnabled(true)));
         r.add(row(Tab.GENERAL, "recipes", "mod_in_tooltip", toggle(s.modInTooltip, v -> set(() -> s.modInTooltip = v)),
                 () -> set(() -> s.modInTooltip = false)));
+        r.add(row(Tab.GENERAL, "language", "item_names", choice(s.englishNames() ? 1 : 0, i -> s.setEnglishNames(i == 1),
+                "wmi.settings.item_names.game", "wmi.settings.item_names.english"), () -> s.setEnglishNames(false)));
         r.add(row(Tab.GENERAL, "settings", "reset_all", new Button(t("wmi.settings.reset_all.button"), true, () -> {
             s.resetToDefaults();
             resetAllKeys();
@@ -283,10 +281,6 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
                 () -> set(() -> s.catalogSort = WmiSettings.CatalogSort.MOD)));
         r.add(row(Tab.CATALOG, "display", "hide_no_recipe", toggle(s.hideNoRecipe, v -> set(() -> s.hideNoRecipe = v)),
                 () -> set(() -> s.hideNoRecipe = false)));
-        r.add(row(Tab.CATALOG, "search", "item_names", choice(s.englishNames() ? 1 : 0, i -> s.setEnglishNames(i == 1),
-                "wmi.settings.item_names.game", "wmi.settings.item_names.english"), () -> s.setEnglishNames(false)));
-        r.add(new Row(Tab.CATALOG, "search", "search_syntax", t("wmi.settings.search_syntax"),
-                t("wmi.settings.search_syntax.desc", RecipeIndex.CRAFTABLE_KEYWORD), new None(), null, null, null));
         r.add(row(Tab.CATALOG, "search", "clear_search", toggle(s.clearSearchOnClose, v -> set(() -> s.clearSearchOnClose = v)),
                 () -> set(() -> s.clearSearchOnClose = false)));
 
@@ -1024,8 +1018,6 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
                 drawButton(g, th, sx + sw - 15, cy - 2, 15, ">", false, mouseX, mouseY, clipTop, clipBottom, active ? st.next() : null, null);
             }
             case ColorPick cp -> drawColorPicker(g, th, x + 10, below + 2, w - 20, mouseX, mouseY, clipTop, clipBottom);
-            case None n -> {
-            }
         }
     }
 
