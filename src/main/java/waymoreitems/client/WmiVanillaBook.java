@@ -1,6 +1,7 @@
 package waymoreitems.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -16,6 +17,7 @@ import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -29,6 +31,7 @@ import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import org.slf4j.Logger;
 import waymoreitems.WmiMod;
 import waymoreitems.WmiPayloads;
 import waymoreitems.core.CatalogItem;
@@ -60,6 +63,7 @@ import static waymoreitems.client.WmiDraw.*;
 
 /** Cahier de recettes de Minecraft : ouvert ou fermé selon le réglage, le choix du joueur étant suivi. */
 final class WmiVanillaBook {
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     private final WmiSettings settings;
     private Screen lastSyncedBookScreen = null;
@@ -83,7 +87,8 @@ final class WmiVanillaBook {
                     try {
                         f.setAccessible(true);
                         return (RecipeBookComponent<?>) f.get(rbs);
-                    } catch (Throwable ignored) {
+                    } catch (ReflectiveOperationException | RuntimeException e) {
+                        LOGGER.debug("Could not read the recipe book field", e);
                     }
                 }
             }
@@ -115,7 +120,7 @@ final class WmiVanillaBook {
             if (rbc.isVisible() != settings.vanillaBookEnabled) {
                 ImageButton btn = findVanillaRecipeBookButton(screen);
                 if (btn != null) {
-                    btn.onPress(new MouseButtonEvent(btn.getX() + 2, btn.getY() + 2, new net.minecraft.client.input.MouseButtonInfo(0, 0)));
+                    btn.onPress(new MouseButtonEvent(btn.getX() + 2, btn.getY() + 2, new MouseButtonInfo(0, 0)));
                 }
             }
         } else {
@@ -126,21 +131,5 @@ final class WmiVanillaBook {
                 settings.save();
             }
         }
-    }
-
-    void toggleVanillaRecipeBook(AbstractContainerScreen<?> screen) {
-        RecipeBookComponent<?> rbc = extractRecipeBookComponent(screen);
-        if (rbc != null) {
-            ImageButton btn = findVanillaRecipeBookButton(screen);
-            if (btn != null) {
-                btn.onPress(new MouseButtonEvent(btn.getX() + 2, btn.getY() + 2, new net.minecraft.client.input.MouseButtonInfo(0, 0)));
-            } else {
-                rbc.toggleVisibility();
-            }
-            settings.vanillaBookEnabled = rbc.isVisible();
-        } else {
-            settings.vanillaBookEnabled = !settings.vanillaBookEnabled;
-        }
-        settings.save();
     }
 }

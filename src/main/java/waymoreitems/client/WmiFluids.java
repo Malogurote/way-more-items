@@ -1,5 +1,6 @@
 package waymoreitems.client;
 
+import com.mojang.logging.LogUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -19,6 +20,7 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.client.fluid.FluidTintSource;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
 import waymoreitems.core.CatalogItem;
 import waymoreitems.core.IngredientRef;
 import waymoreitems.core.RecipeEntry;
@@ -37,6 +39,7 @@ import java.util.Set;
  * {@link IngredientRef#fluidKey} du noyau, leurs quantités en millibuckets.
  */
 final class WmiFluids {
+    private static final Logger LOGGER = LogUtils.getLogger();
     private static final Map<String, Fluid> FLUID_BY_KEY = new HashMap<>();
 
     private WmiFluids() {
@@ -57,7 +60,8 @@ final class WmiFluids {
                 FLUID_BY_KEY.put(key, f);
                 return f;
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            LOGGER.debug("Could not resolve a fluid key", e);
         }
         return null;
     }
@@ -67,6 +71,7 @@ final class WmiFluids {
         try {
             return f != Fluids.EMPTY && f.isSource(f.defaultFluidState());
         } catch (Exception e) {
+            LOGGER.debug("Could not read the state of a fluid", e);
             return false;
         }
     }
@@ -97,6 +102,7 @@ final class WmiFluids {
         try {
             return f.getFluidType().getDescription().getString();
         } catch (Exception e) {
+            LOGGER.debug("Could not read the name of a fluid", e);
             return BuiltInRegistries.FLUID.getKey(f).toString();
         }
     }
@@ -147,7 +153,8 @@ final class WmiFluids {
         if (source != null) {
             try {
                 color = source.colorAsStack(new FluidStack(f, IngredientRef.BUCKET_VOLUME));
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                LOGGER.debug("Could not read the tint of a fluid", e);
             }
         }
         return (color >>> 24) == 0 ? color | 0xFF000000 : color;
@@ -167,6 +174,7 @@ final class WmiFluids {
             TextureAtlasSprite sprite = model.stillMaterial().sprite();
             g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, size, size, tint(f, model));
         } catch (Exception e) {
+            LOGGER.debug("Could not draw a fluid", e);
             return false;
         }
         return true;
@@ -238,6 +246,7 @@ final class WmiFluids {
             Item bucket = f.getBucket();
             return bucket == null || bucket == Items.AIR ? null : BuiltInRegistries.ITEM.getKey(bucket).toString();
         } catch (Exception e) {
+            LOGGER.debug("Could not read the bucket of a fluid", e);
             return null;
         }
     }

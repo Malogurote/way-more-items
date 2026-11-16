@@ -24,7 +24,7 @@ import org.jspecify.annotations.Nullable;
 import waymoreitems.WmiMod;
 
 /**
- * Rendu vectoriel de l'interface de Way More Items (prototype).
+ * Rendu vectoriel de l'interface de Way More Items.
  *
  * <p>Les formes sont des rectangles arrondis décrits par un champ de distance signée (SDF) :
  * le shader {@code wmi:core/sdf_rect} calcule leur couverture au pixel réel de l'écran, ce qui donne

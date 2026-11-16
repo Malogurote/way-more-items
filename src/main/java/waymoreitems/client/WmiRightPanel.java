@@ -1,6 +1,7 @@
 package waymoreitems.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import java.util.HashSet;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -157,7 +158,7 @@ final class WmiRightPanel {
     private @Nullable RecipeIndex modTabsSource;
 
     /** Espaces de noms connus du catalogue (pour regrouper un mod et ses extensions). */
-    java.util.Set<String> knownNamespaces = java.util.Set.of();
+    Set<String> knownNamespaces = Set.of();
     /** Onglet de chaque espace de noms du catalogue, calculé avec les onglets ({@link #modTabs()}). */
     private Map<String, String> tabKeyByNamespace = Map.of();
 
@@ -170,7 +171,7 @@ final class WmiRightPanel {
         return known != null ? known : computeTabKey(namespace, knownNamespaces);
     }
 
-    private static String computeTabKey(String namespace, java.util.Set<String> namespaces) {
+    private static String computeTabKey(String namespace, Set<String> namespaces) {
         String best = namespace;
         for (String other : namespaces) {
             if (!other.equals(namespace) && namespace.startsWith(other + "_") && other.length() < best.length()) {
@@ -187,7 +188,7 @@ final class WmiRightPanel {
             return modTabsCache;
         }
         List<CatalogItem> all = index.allItems();
-        java.util.Set<String> namespaces = new java.util.HashSet<>();
+        Set<String> namespaces = new HashSet<>();
         for (CatalogItem it : all) {
             namespaces.add(it.namespace());
         }
@@ -468,14 +469,10 @@ final class WmiRightPanel {
             bar(g, x + 1, y + h - 2, x + w - 1, y + h, isPurple ? theme().purple : theme().accent);
         }
         if (text != null && !text.isEmpty()) {
-            g.pose().pushMatrix();
-            g.pose().translate(x + 2, y + 2);
-            g.pose().scale(0.88F, 0.88F);
-            g.fakeItem(icon, 0, 0);
-            g.pose().popMatrix();
+            WmiDraw.drawScaledItem(g, icon, x + 2, y + 2, 0.88F);
             drawText(g, font, text, x + 17, y + (h - 8) / 2, active ? theme().accent : theme().textMain);
         } else {
-            g.fakeItem(icon, x + (w - 16) / 2, y + (h - 16) / 2);
+            WmiDraw.drawItem(g, icon, x + (w - 16) / 2, y + (h - 16) / 2);
         }
         o.buttons.drawn.add(new QuickButton(x, y, w, h, text != null ? text : "", tooltip, onClick, null));
     }
@@ -496,7 +493,7 @@ final class WmiRightPanel {
             return;
         }
         int items = 0;
-        java.util.Set<String> recipes = new java.util.HashSet<>();
+        Set<String> recipes = new HashSet<>();
         for (CatalogItem it : idx.allItems()) {
             if (it.isFluid()) {
                 items++;

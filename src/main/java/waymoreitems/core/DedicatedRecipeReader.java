@@ -17,6 +17,7 @@ import java.util.Set;
  * usages de ses objets et n'est jamais retenue par l'arbre de fabrication.</p>
  */
 public final class DedicatedRecipeReader {
+    private static final System.Logger LOGGER = System.getLogger(DedicatedRecipeReader.class.getName());
     /** Sérialiseurs pris en charge. */
     public static final Set<String> SERIALIZERS = Set.of(
             "ae2:entropy", "ae2:transform", "ae2:crafting_unit_transform", "ae2:storage_cell_disassembly",
@@ -104,6 +105,7 @@ public final class DedicatedRecipeReader {
                 default -> null;
             };
         } catch (RuntimeException e) {
+            LOGGER.log(System.Logger.Level.DEBUG, "Could not read the dedicated recipe " + recipeId, e);
             return null;
         }
     }
@@ -283,7 +285,7 @@ public final class DedicatedRecipeReader {
         List<String> ws = new ArrayList<>(e.workstations());
         ws.addAll(extra);
         return new RecipeEntry(e.id(), e.typeId(), e.categoryName(), ws, e.inputs(), e.catalysts(), e.outputs(),
-                e.durationTicks(), e.euPerTick(), e.totalEnergy(), e.inputCells());
+                e.durationTicks(), e.energyPerTick(), e.totalEnergy(), e.inputCells());
     }
 
     /** Objet d'une entrée ou sortie {@code {block:{id}} | {fluid:{id}}}, ou {@code ""}. */

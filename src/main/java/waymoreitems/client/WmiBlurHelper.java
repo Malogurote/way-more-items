@@ -4,6 +4,7 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.resource.CrossFrameResourcePool;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.logging.LogUtils;
 import com.mojang.renderpearl.api.GpuFormat;
 import com.mojang.renderpearl.api.textures.FilterMode;
 import com.mojang.renderpearl.api.textures.GpuSampler;
@@ -14,6 +15,7 @@ import net.minecraft.client.renderer.LevelTargetBundle;
 import net.minecraft.client.renderer.PostChain;
 import net.minecraft.resources.Identifier;
 import org.joml.Matrix3x2fc;
+import org.slf4j.Logger;
 import waymoreitems.WmiMod;
 
 /**
@@ -23,6 +25,7 @@ import waymoreitems.WmiMod;
  * puis plaque uniquement les régions correspondant aux panneaux de WMI.
  */
 public final class WmiBlurHelper {
+    private static final Logger LOGGER = LogUtils.getLogger();
     private static final Identifier FROSTED_BLUR_ID = Identifier.fromNamespaceAndPath(WmiMod.MODID, "frosted_blur");
     private static final Identifier VANILLA_BLUR_ID = Identifier.withDefaultNamespace("blur");
     private static final CrossFrameResourcePool POOL = new CrossFrameResourcePool(3);
@@ -30,7 +33,17 @@ public final class WmiBlurHelper {
     private static TextureTarget blurredTarget;
     private static boolean requestedThisFrame = false;
 
+    private static boolean failureLogged = false;
+
     private WmiBlurHelper() {
+    }
+
+    /** Logs the first rendering failure only: the blur runs every frame and would flood the log. */
+    private static void logOnce(String what, RuntimeException e) {
+        if (!failureLogged) {
+            failureLogged = true;
+            LOGGER.warn("{} (further failures are not logged)", what, e);
+        }
     }
 
     private static TextureTarget ensureTarget(Minecraft mc) {
@@ -49,7 +62,8 @@ public final class WmiBlurHelper {
                 blurredTarget.resize(w, h);
             }
             return blurredTarget;
-        } catch (Throwable ignored) {
+        } catch (RuntimeException e) {
+            logOnce("Blur: creating or resizing the blur target failed", e);
             return null;
         }
     }
@@ -94,7 +108,8 @@ public final class WmiBlurHelper {
         try {
             GpuSampler sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
             g.blit(view, sampler, cx0, cy0, cx1, cy1, u0, u1, v0, v1);
-        } catch (Throwable ignored) {
+        } catch (RuntimeException e) {
+            logOnce("Blur: drawing the blurred texture failed", e);
         }
     }
 
@@ -118,7 +133,8 @@ public final class WmiBlurHelper {
         try {
             GpuSampler sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
             WmiVector.texturedScreen(g, view, sampler, x, y, w, h, radius);
-        } catch (Throwable ignored) {
+        } catch (RuntimeException e) {
+            logOnce("Blur: drawing the frosted panel failed", e);
         }
     }
 
@@ -156,7 +172,8 @@ public final class WmiBlurHelper {
             if (chain != null) {
                 chain.process(blurredTarget, POOL);
             }
-        } catch (Throwable ignored) {
+        } catch (RuntimeException e) {
+            logOnce("Blur: processing the blur chain failed", e);
         } finally {
             POOL.endFrame();
         }

@@ -165,7 +165,7 @@ final class WmiInventoryTools {
                 int cSlot = slot.getContainerSlot();
                 if (cSlot >= 9 && cSlot < 36) {
                     if (lockedPlayerSlots.contains(playerMainIndex)) {
-                        g.fill(sx, sy, sx + 4, sy + 4, LOCK_BADGE);
+                        WmiDraw.fillRect(g, sx, sy, sx + 4, sy + 4, LOCK_BADGE);
                     }
                     playerMainIndex++;
                 }
@@ -174,9 +174,9 @@ final class WmiInventoryTools {
                 ItemStack st = slot.getItem();
                 if (!st.isEmpty()) {
                     String id = BuiltInRegistries.ITEM.getKey(st.getItem()).toString();
-                    g.fill(sx, sy, sx + 16, sy + 16, matchedIds.contains(id) ? HIGHLIGHT_YELLOW : DIM_MASK);
+                    WmiDraw.fillRect(g, sx, sy, sx + 16, sy + 16, matchedIds.contains(id) ? HIGHLIGHT_YELLOW : DIM_MASK);
                 } else {
-                    g.fill(sx, sy, sx + 16, sy + 16, DIM_MASK);
+                    WmiDraw.fillRect(g, sx, sy, sx + 16, sy + 16, DIM_MASK);
                 }
             }
         }

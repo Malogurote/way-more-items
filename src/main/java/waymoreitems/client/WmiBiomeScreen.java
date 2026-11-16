@@ -6,17 +6,20 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.Util;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.util.Util;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jspecify.annotations.Nullable;
 import waymoreitems.WmiPayloads;
 
 import java.text.Collator;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Fenêtre des biomes (bouton de la sous-barre « Outils ») : une gélule par ligne portant le nom du biome, sans objet
@@ -93,7 +96,7 @@ final class WmiBiomeScreen extends WmiListScreen {
 
         // Onglets carrés : biomes de Minecraft et dimensions, puis un par mod qui ajoute des biomes, par nom
         List<SideTab> mods = new ArrayList<>();
-        java.util.Set<String> seen = new java.util.HashSet<>();
+        Set<String> seen = new HashSet<>();
         List<Entry> byModName = new ArrayList<>(list);
         byModName.sort((x, y) -> collator.compare(x.modName(), y.modName()));
         for (Entry e : byModName) {
@@ -210,7 +213,7 @@ final class WmiBiomeScreen extends WmiListScreen {
             g.fakeItem(tab.icon(), x + (TAB_SIZE - 16) / 2, y + (TAB_SIZE - 16) / 2);
         }
         if (hover) {
-            g.setTooltipForNextFrame(font, List.of(Component.literal(tab.title())), java.util.Optional.empty(),
+            g.setTooltipForNextFrame(font, List.of(Component.literal(tab.title())), Optional.empty(),
                     WmiUiScale.real(mouseX), WmiUiScale.real(mouseY));
         }
         String id = tab.id();

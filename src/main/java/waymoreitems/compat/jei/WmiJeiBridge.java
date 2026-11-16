@@ -143,8 +143,9 @@ final class WmiJeiBridge implements WmiExternalSources.Bridge {
                     workstations.add(id);
                 }
             });
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
             // catalyseurs facultatifs
+            LOGGER.debug("WMI: JEI catalysts not read", t);
         }
         int failures = 0;
         int index = 0;
@@ -192,8 +193,9 @@ final class WmiJeiBridge implements WmiExternalSources.Bridge {
                     stats.hiddenByMod.merge(id == null ? type.getUid().getNamespace() : namespace(id), 1, Integer::sum);
                 }
             });
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
             // simple relevé
+            LOGGER.debug("WMI: JEI ingredient survey failed", t);
         }
     }
 
@@ -333,6 +335,7 @@ final class WmiJeiBridge implements WmiExternalSources.Bridge {
             Identifier id = category.getIdentifier(recipe);
             return id == null ? null : id.toString();
         } catch (Throwable t) {
+            LOGGER.debug("WMI: JEI recipe id not read", t);
             return null;
         }
     }
@@ -362,6 +365,7 @@ final class WmiJeiBridge implements WmiExternalSources.Bridge {
         try {
             return rt.getScreenHelper().getGuiExclusionAreas(screen).toList();
         } catch (Throwable t) {
+            LOGGER.debug("WMI: JEI exclusion areas not read", t);
             return List.of();
         } finally {
             queryingAreas = false;

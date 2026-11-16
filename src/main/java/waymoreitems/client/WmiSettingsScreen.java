@@ -1,11 +1,5 @@
 package waymoreitems.client;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.function.Consumer;
-import java.util.function.IntConsumer;
-import java.util.function.IntFunction;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -23,6 +17,14 @@ import net.neoforged.neoforge.client.settings.KeyModifier;
 import org.jspecify.annotations.Nullable;
 import waymoreitems.core.CatalogItem;
 import waymoreitems.core.ThemePalette;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
+import java.util.function.IntFunction;
 
 /**
  * Fenêtre « Paramètres » de Way More Items : six onglets en colonne (Général, Interface, Catalogue, Widgets, HUD,
@@ -357,7 +359,7 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
     }
 
     /** Lignes secondaires, en retrait sous le réglage dont elles dépendent. */
-    private static final java.util.Set<String> SUB_ROWS = java.util.Set.of("custom_color", "toolbar_labels", "widget_size",
+    private static final Set<String> SUB_ROWS = Set.of("custom_color", "toolbar_labels", "widget_size",
             "widget_position", "clock_mod", "notes_empty");
 
     /**

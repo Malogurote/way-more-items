@@ -5,6 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import waymoreitems.core.GuiLayout;
 import waymoreitems.core.MiniJson;
@@ -12,10 +13,12 @@ import waymoreitems.core.MiniJson;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Mise en page appliquée à la surcouche, rechargement à chaud et relevé de l'écran ouvert.
@@ -79,7 +82,7 @@ public final class WmiLayoutRuntime {
             GuiLayout next = GuiLayout.fromJson(Files.readString(path, StandardCharsets.UTF_8));
             List<String> problems = next.validate();
             if (!problems.isEmpty()) {
-                String msg = WmiText.s("wmi.layout.refused", problems.subList(0, Math.min(3, problems.size())).stream().map(WmiLayoutRuntime::localize).collect(java.util.stream.Collectors.joining(" ; ")));
+                String msg = WmiText.s("wmi.layout.refused", problems.subList(0, Math.min(3, problems.size())).stream().map(WmiLayoutRuntime::localize).collect(Collectors.joining(" ; ")));
                 tell(msg, ChatFormatting.RED);
                 return msg;
             }
@@ -107,14 +110,14 @@ public final class WmiLayoutRuntime {
     static String localize(String raw) {
         String[] p = raw.split("\\|", -1);
         if ("json".equals(p[0]) && p.length >= 4) {
-            String sub = String.join("|", java.util.Arrays.copyOfRange(p, 3, p.length));
+            String sub = String.join("|", Arrays.copyOfRange(p, 3, p.length));
             return WmiText.s("wmi.layout.err.json", p[1], p[2], localize(sub));
         }
         String key = "wmi.layout.err." + p[0];
-        if (!net.minecraft.locale.Language.getInstance().has(key)) {
+        if (!Language.getInstance().has(key)) {
             return raw;
         }
-        return WmiText.s(key, (Object[]) java.util.Arrays.copyOfRange(p, 1, p.length));
+        return WmiText.s(key, (Object[]) Arrays.copyOfRange(p, 1, p.length));
     }
 
     public static boolean fromFile() {

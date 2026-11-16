@@ -20,6 +20,7 @@ import java.util.Properties;
  * </ul>
  */
 public final class SettingsFile {
+    private static final System.Logger LOGGER = System.getLogger(SettingsFile.class.getName());
 
     /** Suffixe de la copie de secours d'un fichier illisible. */
     public static final String UNREADABLE_SUFFIX = ".illisible";
@@ -57,9 +58,11 @@ public final class SettingsFile {
             p.load(in);
             return new SettingsFile(p, false);
         } catch (IOException | RuntimeException e) {
+            LOGGER.log(System.Logger.Level.WARNING, "Could not read the settings file " + path, e);
             try {
                 Files.copy(path, path.resolveSibling(path.getFileName() + UNREADABLE_SUFFIX), StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException | RuntimeException ignored) {
+            } catch (IOException | RuntimeException copyFailure) {
+                LOGGER.log(System.Logger.Level.WARNING, "Could not back up the unreadable settings file " + path, copyFailure);
                 // la copie de secours est un confort : sans elle, le chargement continue avec les valeurs par défaut
             }
             return new SettingsFile(new Properties(), true);

@@ -1,14 +1,15 @@
 package waymoreitems.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.commands.Commands;
-import net.minecraft.network.chat.Component;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
@@ -25,9 +26,9 @@ import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
+import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
-import net.minecraft.ChatFormatting;
 import org.joml.Matrix3x2fStack;
 import waymoreitems.WmiMod;
 import waymoreitems.WmiPayloads;
@@ -67,7 +68,7 @@ public final class WmiClient {
         modBus.addListener(WmiVector::registerPipelines);
         modBus.addListener(WmiItemPip::register);
         // Paquet serveur vers client (liste des biomes) : gestionnaire enregistré ici, côté client seulement
-        modBus.addListener((net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent e) ->
+        modBus.addListener((RegisterClientPayloadHandlersEvent e) ->
                 e.register(WmiPayloads.BiomeListPayload.TYPE, WmiBiomeScreen::onBiomeList));
 
         NeoForge.EVENT_BUS.addListener(WmiClient::onRecipesReceived);

@@ -273,9 +273,7 @@ final class WmiTimeWidget {
         double modK = WmiVector.STEP_PERCENTS[modStep] / 100.0;
         String mod = hudTrim(font, env[3], 0, modStep, textW);
         if (!vector) {
-            g.pose().pushMatrix();
-            g.pose().translate(x, y);
-            g.pose().scale((float) k, (float) k);
+            WmiDraw.pushScale(g, x, y, (float) k);
         }
         int ox = vector ? x : 0;
         int oy = vector ? y : 0;
@@ -294,7 +292,7 @@ final class WmiTimeWidget {
                     (int) Math.round(14 * u), (int) Math.round(8 * u));
         }
         if (!vector) {
-            g.pose().popMatrix();
+            WmiDraw.popScale(g);
         }
     }
 
@@ -366,8 +364,8 @@ final class WmiTimeWidget {
         for (int i = 0; i < len; i++) {
             double t = len <= 1 ? 0.0 : i / (double) (len - 1);
             int cut = (i == 0 || i == len - 1) ? 1 : 0;
-            g.fill(sunX + cut, top + i, sunX + lineW - cut, top + i + 1, gradientAt(SUN_STOPS, t));
-            g.fill(moonX + cut, top + i, moonX + lineW - cut, top + i + 1, gradientAt(MOON_STOPS, t));
+            WmiDraw.fillRect(g, sunX + cut, top + i, sunX + lineW - cut, top + i + 1, gradientAt(SUN_STOPS, t));
+            WmiDraw.fillRect(g, moonX + cut, top + i, moonX + lineW - cut, top + i + 1, gradientAt(MOON_STOPS, t));
         }
         // Lever 5 h (tick 23000), coucher 19 h (tick 13000) : bornes du jour de Minecraft ; la lune prend la nuit (19 h à 5 h)
         double sunT = (hourF - 5.0) / 14.0;
@@ -388,21 +386,21 @@ final class WmiTimeWidget {
     void drawSunIcon(GuiGraphicsExtractor g, int cx, int cy, int half) {
         int ray = Math.max(1, half / 2);
         int rw = Math.max(1, half * 2 / 3);
-        g.fill(cx - half, cy - half, cx + half, cy + half, 0xFFC98A12);
-        g.fill(cx - half + 1, cy - half + 1, cx + half - 1, cy + half - 1, 0xFFFFD23F);
-        g.fill(cx - rw / 2, cy - half - ray, cx - rw / 2 + rw, cy - half, 0xFFFFD23F);
-        g.fill(cx - rw / 2, cy + half, cx - rw / 2 + rw, cy + half + ray, 0xFFFFD23F);
-        g.fill(cx - half - ray, cy - rw / 2, cx - half, cy - rw / 2 + rw, 0xFFFFD23F);
-        g.fill(cx + half, cy - rw / 2, cx + half + ray, cy - rw / 2 + rw, 0xFFFFD23F);
+        WmiDraw.fillRect(g, cx - half, cy - half, cx + half, cy + half, 0xFFC98A12);
+        WmiDraw.fillRect(g, cx - half + 1, cy - half + 1, cx + half - 1, cy + half - 1, 0xFFFFD23F);
+        WmiDraw.fillRect(g, cx - rw / 2, cy - half - ray, cx - rw / 2 + rw, cy - half, 0xFFFFD23F);
+        WmiDraw.fillRect(g, cx - rw / 2, cy + half, cx - rw / 2 + rw, cy + half + ray, 0xFFFFD23F);
+        WmiDraw.fillRect(g, cx - half - ray, cy - rw / 2, cx - half, cy - rw / 2 + rw, 0xFFFFD23F);
+        WmiDraw.fillRect(g, cx + half, cy - rw / 2, cx + half + ray, cy - rw / 2 + rw, 0xFFFFD23F);
     }
 
     /** Lune carrée en pixels : disque pâle cerclé de gris bleuté, deux cratères ; {@code half} = demi-côté. */
     void drawMoonIcon(GuiGraphicsExtractor g, int cx, int cy, int half) {
         int c = Math.max(1, half / 2);
-        g.fill(cx - half, cy - half, cx + half, cy + half, 0xFF8D97B3);
-        g.fill(cx - half + 1, cy - half + 1, cx + half - 1, cy + half - 1, 0xFFE8ECF5);
-        g.fill(cx - c, cy - c, cx, cy, 0xFFB7BFD6);
-        g.fill(cx + 1, cy + 1, cx + 1 + c, cy + 1 + c, 0xFFB7BFD6);
+        WmiDraw.fillRect(g, cx - half, cy - half, cx + half, cy + half, 0xFF8D97B3);
+        WmiDraw.fillRect(g, cx - half + 1, cy - half + 1, cx + half - 1, cy + half - 1, 0xFFE8ECF5);
+        WmiDraw.fillRect(g, cx - c, cy - c, cx, cy, 0xFFB7BFD6);
+        WmiDraw.fillRect(g, cx + 1, cy + 1, cx + 1 + c, cy + 1 + c, 0xFFB7BFD6);
     }
 
     /** Cran d'échelle le plus proche de l'échelle réglée (indice dans {@link WmiVector#STEP_PERCENTS}). */

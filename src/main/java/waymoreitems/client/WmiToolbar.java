@@ -1,6 +1,7 @@
 package waymoreitems.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import java.util.function.Function;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -218,7 +219,7 @@ final class WmiToolbar {
     }
 
     /** Ouvre une fenêtre de WMI par-dessus l'écran courant, qui y revient à la fermeture. */
-    private static void openOver(java.util.function.Function<@Nullable Screen, Screen> factory) {
+    private static void openOver(Function<@Nullable Screen, Screen> factory) {
         Minecraft mc = Minecraft.getInstance();
         mc.gui.setScreen(factory.apply(mc.gui.screen()));
     }
@@ -398,16 +399,12 @@ final class WmiToolbar {
         drawBox(g, x, y, w, h, bg, brd);
         int iconX = label ? x + 3 : x + (w - 12) / 2;
         if (e.texture() != null) {
-            g.blit(RenderPipelines.GUI_TEXTURED, e.texture(), iconX, y + (h - 12) / 2, 0.0F, 0.0F, 12, 12, 12, 12);
+            WmiDraw.drawIcon(g, e.texture(), iconX, y + (h - 12) / 2, 12, 12);
         } else if (e.item() != null && !e.item().isEmpty()) {
             float sc = Math.min(1.0F, (h - 2) / 16.0F);
             int size = Math.round(16 * sc);
             int ix = label ? x + 1 : x + (w - size) / 2;
-            g.pose().pushMatrix();
-            g.pose().translate(ix, y + (h - size) / 2.0F);
-            g.pose().scale(sc, sc);
-            g.fakeItem(e.item(), 0, 0);
-            g.pose().popMatrix();
+            WmiDraw.drawScaledItem(g, e.item(), ix, y + (h - size) / 2.0F, sc);
         }
         if (label) {
             drawText(g, font, e.label(), x + 17, y + (h - 8) / 2, (e.active() || hover) ? theme().accent : theme().textMain);
@@ -428,8 +425,7 @@ final class WmiToolbar {
         }
         boolean hover = r.contains(mouseX, mouseY);
         drawBox(g, r.x(), r.y(), r.w(), r.h(), hover ? theme().slotHover : theme().panelBg, hover ? theme().accent : theme().border);
-        g.blit(RenderPipelines.GUI_TEXTURED, ICO_GEAR, r.x() + (r.w() - 16) / 2, r.y() + (r.h() - 16) / 2,
-                0.0F, 0.0F, 16, 16, 16, 16);
+        WmiDraw.drawIcon(g, ICO_GEAR, r.x() + (r.w() - 16) / 2, r.y() + (r.h() - 16) / 2, 16, 16);
         o.buttons.drawn.add(new QuickButton(r.x(), r.y(), r.w(), r.h(), WmiText.s("wmi.button.settings"),
                 WmiText.s("wmi.button.settings_tip"),
                 () -> Minecraft.getInstance().gui.setScreen(new WmiSettingsScreen(screen)), null));
@@ -451,11 +447,9 @@ final class WmiToolbar {
         drawBox(g, r.x(), r.y(), r.w(), r.h(), hover ? theme().slotHover : theme().panelBg, hover ? theme().accent : theme().border);
         String tag = jei ? "JEI" : "WMI";
         int tw = smallTextWidth(font, tag);
-        g.pose().pushMatrix();
-        g.pose().translate(r.x() + (r.w() - tw) / 2.0F, r.y() + (r.h() - 6) / 2.0F);
-        g.pose().scale(0.75F, 0.75F);
+        WmiDraw.pushScale(g, r.x() + (r.w() - tw) / 2.0F, r.y() + (r.h() - 6) / 2.0F, 0.75F);
         drawText(g, font, tag, 0, 0, hover ? theme().accent : theme().textMain);
-        g.pose().popMatrix();
+        WmiDraw.popScale(g);
         String label = WmiText.s(jei ? "wmi.button.viewer_jei" : "wmi.button.viewer_wmi");
         o.buttons.drawn.add(new QuickButton(r.x(), r.y(), r.w(), r.h(), label,
                 label + ". " + WmiText.s(jei ? "wmi.button.viewer_jei_tip" : "wmi.button.viewer_wmi_tip"),

@@ -1,8 +1,6 @@
 package waymoreitems.client;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -13,6 +11,11 @@ import net.minecraft.network.chat.FormattedText;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Option « Noms d'objets : anglais » pour tout le jeu : les noms d'objets et de blocs, les enchantements et les effets
@@ -24,6 +27,7 @@ import org.jspecify.annotations.Nullable;
  * ressources), Minecraft installe une nouvelle table ; {@link #syncGameLanguage()}, appelé à chaque tick, la recouvre.
  */
 public final class WmiNames {
+    private static final Logger LOGGER = LogUtils.getLogger();
     /** Familles de clés passées en anglais. */
     private static final String[] PREFIXES = {"item.", "block.", "enchantment.", "effect."};
 
@@ -105,7 +109,8 @@ public final class WmiNames {
                     }
                 }
                 englishNames = picked;
-            } catch (Throwable t) {
+            } catch (RuntimeException e) {
+                LOGGER.warn("Could not read the English names", e);
                 englishNames = Map.of();
             }
         }

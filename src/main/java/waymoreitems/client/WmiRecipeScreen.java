@@ -1,17 +1,19 @@
 package waymoreitems.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.world.inventory.AbstractCraftingMenu;
-import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.inventory.AbstractCraftingMenu;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Recipe;
 import waymoreitems.WmiPayloads;
 import waymoreitems.api.RecipeLayoutSpec;
 import waymoreitems.api.WmiRegistry;
@@ -30,6 +32,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Fenêtre modale interactive de Way More Items (harmoniée au thème actif de {@link WmiOverlay},
@@ -461,8 +466,8 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             WmiDraw.drawText(g, font, sec, metaX, metaY, th.textMain);
             metaY += 10;
         }
-        if (rec.euPerTick() > 0) {
-            WmiDraw.drawText(g, font, rec.euPerTick() + " EU/t", metaX, metaY, th.accent);
+        if (rec.energyPerTick() > 0) {
+            WmiDraw.drawText(g, font, rec.energyPerTick() + " EU/t", metaX, metaY, th.accent);
             metaY += 10;
         }
         if (rec.totalEnergy() > 0) {
@@ -1073,7 +1078,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         int bottomY = y0 + boxH - size;
         int treeY = canGive ? bottomY - size - 3 : bottomY;
         boolean treeActive = mode == ViewMode.CRAFT_TREE;
-        sideTab(g, th, tx, treeY, size, size, new ItemStack(net.minecraft.world.item.Items.CRAFTING_TABLE), treeActive, false,
+        sideTab(g, th, tx, treeY, size, size, new ItemStack(Items.CRAFTING_TABLE), treeActive, false,
                 List.of(WmiText.c("gui.wmi.btn.tree")), mouseX, mouseY,
                 () -> navigateTo(treeActive ? ViewMode.RECIPES : ViewMode.CRAFT_TREE, targetItemId));
         String giveId = WmiFluids.giveTarget(targetItemId);
@@ -1081,7 +1086,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             ItemStack st = WmiClientIndex.stackFor(giveId);
             int count = st.isEmpty() ? 64 : Math.max(1, Math.min(64, st.getMaxStackSize()));
             List<Component> tip = List.of(WmiText.c("wmi.recipe.give_count", count),
-                    WmiText.c("wmi.recipe.give_tip").withStyle(net.minecraft.ChatFormatting.GRAY));
+                    WmiText.c("wmi.recipe.give_tip").withStyle(ChatFormatting.GRAY));
             sideTab(g, th, tx, bottomY, size, size, st, false, true, tip, mouseX, mouseY,
                     () -> WmiClient.overlay().giveItemToPlayer(targetItemId, count));
         }
@@ -1135,7 +1140,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             g.fill(bx + 3, by + 2, bx + 5, by + 6, 0xFFFFFFFF);
         }
         if (hover) {
-            g.setTooltipForNextFrame(font, tooltip, java.util.Optional.empty(), WmiUiScale.real(mouseX), WmiUiScale.real(mouseY));
+            g.setTooltipForNextFrame(font, tooltip, Optional.empty(), WmiUiScale.real(mouseX), WmiUiScale.real(mouseY));
         }
         clickZones.add(new ClickableZone(x, y, w, h, onClick));
     }
@@ -1323,12 +1328,12 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
     /** Recherche de l'objet, sans le nombre éventuel en tête (« 16 torche » : 16 torches). */
     private String editorQuery() {
         String q = editorText().trim();
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(\\d{1,4})\\s+(.*)$").matcher(q);
+        Matcher m = Pattern.compile("^(\\d{1,4})\\s+(.*)$").matcher(q);
         return m.matches() ? m.group(2) : q;
     }
 
     private int editorCount() {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(\\d{1,4})\\s+.*$").matcher(editorText().trim());
+        Matcher m = Pattern.compile("^(\\d{1,4})\\s+.*$").matcher(editorText().trim());
         return m.matches() ? Math.max(1, Integer.parseInt(m.group(1))) : editorQty;
     }
 
@@ -1337,9 +1342,9 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         String q = editorQuery();
         if (!q.equals(editorMatchQuery)) {
             editorMatchQuery = q;
-            List<String> found = new java.util.ArrayList<>();
+            List<String> found = new ArrayList<>();
             if (!q.isEmpty()) {
-                for (waymoreitems.core.CatalogItem it : WmiClientIndex.peek().search(q)) {
+                for (CatalogItem it : WmiClientIndex.peek().search(q)) {
                     found.add(it.id());
                     if (found.size() >= 24) {
                         break;
@@ -1348,7 +1353,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             }
             editorMatches = found;
         }
-        List<String> shown = new java.util.ArrayList<>();
+        List<String> shown = new ArrayList<>();
         if (editorPicked != null) {
             shown.add(editorPicked);
         }
@@ -1424,7 +1429,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             int count = editorCount();
             if (tree && !WmiClientIndex.peek().recipesForOutput(id).isEmpty()) {
                 checklist.useIndex(WmiClientIndex.peek());
-                checklist.pinCraft(id, count, java.util.Map.of(), null);
+                checklist.pinCraft(id, count, Map.of(), null);
             } else {
                 checklist.pinOrIncrementItem(id, count);
             }
@@ -1465,7 +1470,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
         boolean isBackspace = (key == InputConstants.KEY_BACKSPACE || key == 259);
-        boolean isEnter = (event.isConfirmation() || key == InputConstants.KEY_RETURN || key == 257 || key == 335);
+        boolean isEnter = (event.isConfirmation() || key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER);
 
         if (amountFocused) {
             if (isBackspace) {
