@@ -8,24 +8,20 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 
 /**
- * Suite de tests unitaires en Java pur du noyau de Way More Items (sans bibliothèque externe) :
- * {@code gradle :way-more-items:wmiTests}. Code de sortie 1 en cas d'échec.
+ * Vérifications du noyau de Way More Items en Java pur, exécutées par JUnit 5 ({@link CoreTests}, une vérification
+ * par cas) : {@code gradle test}.
  */
-public final class WmiTests {
-    private static int failures;
-    private static int checks;
+final class WmiTests {
+    private static BiConsumer<String, Boolean> sink = (name, ok) -> { };
 
     private WmiTests() {
     }
 
     private static void check(String name, boolean ok) {
-        checks++;
-        if (!ok) {
-            failures++;
-            System.out.println("ECHEC : " + name);
-        }
+        sink.accept(name, ok);
     }
 
     private static List<CatalogItem> sampleItems() {
@@ -860,7 +856,9 @@ public final class WmiTests {
                 CoverageReport.of(java.util.List.of()).mods().isEmpty() && CoverageReport.of(java.util.List.of()).percent() == 100.0);
     }
 
-    public static void main(String[] args) {
+    /** Lance toutes les vérifications ; chacune est transmise à {@code check} avec son nom et son résultat. */
+    static void runAll(BiConsumer<String, Boolean> check) {
+        sink = check;
         RecipeIndex index = new RecipeIndex(sampleItems(), sampleRecipes());
         testSearchAndFilters(index);
         testCraftTreeAndCycles(index);
@@ -884,10 +882,6 @@ public final class WmiTests {
         ImportedLayoutTests.run(WmiTests::check);
         FluidTests.run(WmiTests::check);
         DedicatedRecipeTests.run(WmiTests::check);
-
-        System.out.println("WmiTests : " + checks + " verifications, " + failures + " echec(s).");
-        if (failures > 0) {
-            System.exit(1);
-        }
+        CoreLogicTests.run(WmiTests::check);
     }
 }

@@ -43,6 +43,7 @@ import waymoreitems.api.RecipeLayoutSpec;
 import waymoreitems.api.WmiRegistry;
 import waymoreitems.core.CatalogItem;
 import waymoreitems.core.CoverageReport;
+import waymoreitems.core.ItemCategories;
 import waymoreitems.core.RecipeEntry;
 import waymoreitems.core.RecipeIndex;
 
@@ -527,38 +528,9 @@ public final class WmiClientIndex {
     }
 
     private static String classifyItemCategory(Item item, ItemStack stack, String path, Set<String> tags) {
-        String p = path.toLowerCase(Locale.ROOT);
-        if (item instanceof BlockItem bi) {
-            if (bi.getBlock() instanceof EntityBlock
-                    || p.contains("machine") || p.contains("furnace")
-                    || p.contains("generator")
-                    || p.contains("boiler") || p.contains("turbine") || p.contains("solar")
-                    || p.contains("wind") || p.contains("pump") || p.contains("pipe")
-                    || p.contains("cable") || p.contains("conveyor") || p.contains("crafter")
-                    || p.contains("anvil") || p.contains("table") || p.contains("stonecutter")
-                    || p.contains("grindstone") || p.contains("hopper") || p.contains("piston")
-                    || p.contains("observer") || p.contains("dispenser") || p.contains("dropper")
-                    || p.contains("redstone") || p.contains("repeater") || p.contains("comparator")
-                    || p.contains("rail") || p.contains("lever") || p.contains("button")) {
-                return "01_machines";
-            }
-            return "02_blocks";
-        }
-        for (String t : tags) {
-            if (t.contains("tools") || t.contains("weapons") || t.contains("armors")
-                    || t.contains("enchantable") || t.contains("swords") || t.contains("pickaxes")
-                    || t.contains("axes") || t.contains("shovels") || t.contains("hoes")) {
-                return "03_tools";
-            }
-        }
-        if (stack.getMaxDamage() > 0 || p.contains("wrench") || p.contains("hammer")
-                || p.contains("sword") || p.contains("pickaxe") || p.contains("axe")
-                || p.contains("shovel") || p.contains("hoe") || p.contains("helmet")
-                || p.contains("chestplate") || p.contains("leggings") || p.contains("boots")
-                || p.contains("bow") || p.contains("shield") || p.contains("shears")) {
-            return "03_tools";
-        }
-        return "04_materials";
+        boolean blockItem = item instanceof BlockItem;
+        boolean entityBlock = item instanceof BlockItem bi && bi.getBlock() instanceof EntityBlock;
+        return ItemCategories.classify(blockItem, entityBlock, stack.getMaxDamage() > 0, path, tags);
     }
 
     private static RecipeEntry convertHolder(RecipeHolder<?> holder, ContextMap context) {

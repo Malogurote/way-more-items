@@ -38,6 +38,7 @@ import waymoreitems.core.PinnedChecklist;
 import waymoreitems.core.RecipeIndex;
 import waymoreitems.core.SettingsFile;
 import waymoreitems.core.ThemePalette;
+import waymoreitems.core.WorldClock;
 import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
@@ -287,7 +288,7 @@ final class WmiTimeWidget {
             hudText(g, font, mod, 0, modStep, vector ? modK : k, cx - hudWidth(font, mod, 0, modStep) / 2, oy + m.modBase(), theme().textMuted);
         }
         if (m.lines()) {
-            double hourF = ((Minecraft.getInstance().level.getDefaultClockTime() + 6000L) % 24000L) / 1000.0;
+            double hourF = WorldClock.hourOfDay(Minecraft.getInstance().level.getDefaultClockTime());
             renderSunMoonLines(g, ox, oy, vector ? m.w() : m.unitW(), vector ? m.h() : m.unitH(), u, hourF,
                     (int) Math.round(14 * u), (int) Math.round(8 * u));
         }
@@ -324,11 +325,8 @@ final class WmiTimeWidget {
      * jour, coucher du soleil par temps clair), si l'alerte est activée.
      */
     int timeColor(Minecraft mc) {
-        if (settings.nightAlert && mc.level != null) {
-            long t = Math.floorMod(mc.level.getDefaultClockTime(), 24000L);
-            if (t >= 12000L && t < 13188L) {
-                return theme().gold;
-            }
+        if (settings.nightAlert && mc.level != null && WorldClock.nightWarning(mc.level.getDefaultClockTime())) {
+            return theme().gold;
         }
         return theme().textMain;
     }
@@ -367,17 +365,16 @@ final class WmiTimeWidget {
             WmiDraw.fillRect(g, sunX + cut, top + i, sunX + lineW - cut, top + i + 1, gradientAt(SUN_STOPS, t));
             WmiDraw.fillRect(g, moonX + cut, top + i, moonX + lineW - cut, top + i + 1, gradientAt(MOON_STOPS, t));
         }
-        // Lever 5 h (tick 23000), coucher 19 h (tick 13000) : bornes du jour de Minecraft ; la lune prend la nuit (19 h à 5 h)
-        double sunT = (hourF - 5.0) / 14.0;
-        double moonT = ((hourF - 19.0 + 24.0) % 24.0) / 10.0;
+        double sunT = WorldClock.sunProgress(hourF);
+        double moonT = WorldClock.moonProgress(hourF);
         int bottom = top + len;
         int half = Math.max(3, (int) Math.round(3.5 * u));
-        if (sunT >= 0.0 && sunT <= 1.0) {
-            int cy = (int) Math.round(bottom - Math.sin(Math.PI * sunT) * (len - 2 * half) - half);
+        if (WorldClock.aboveHorizon(sunT)) {
+            int cy = (int) Math.round(bottom - WorldClock.arcHeight(sunT) * (len - 2 * half) - half);
             drawSunIcon(g, sunX + lineW / 2, cy, half);
         }
-        if (moonT >= 0.0 && moonT <= 1.0) {
-            int cy = (int) Math.round(bottom - Math.sin(Math.PI * moonT) * (len - 2 * half) - half);
+        if (WorldClock.aboveHorizon(moonT)) {
+            int cy = (int) Math.round(bottom - WorldClock.arcHeight(moonT) * (len - 2 * half) - half);
             drawMoonIcon(g, moonX + lineW / 2, cy, half);
         }
     }
@@ -434,14 +431,10 @@ final class WmiTimeWidget {
     /** Heure du monde (HH:MM), biome traduit, numéro du jour et mod du biome. */
     String[] environmentLines(Minecraft mc) {
         long dayTime = mc.level != null ? mc.level.getDefaultClockTime() : 0L;
-        long dayCount = dayTime / 24000L + 1L;
-        long ticksOfDay = (dayTime + 6000L) % 24000L;
-        int hours = (int) (ticksOfDay / 1000L);
-        int minutes = (int) ((ticksOfDay % 1000L) * 60L / 1000L);
         return new String[]{
-                formatWorldTime(hours, minutes),
+                formatWorldTime(WorldClock.hours(dayTime), WorldClock.minutes(dayTime)),
                 currentBiomeName(mc),
-                WmiText.s("wmi.hud.day", dayCount),
+                WmiText.s("wmi.hud.day", WorldClock.dayNumber(dayTime)),
                 currentBiomeModName(mc)
         };
     }
@@ -458,7 +451,7 @@ final class WmiTimeWidget {
             // Les traductions de Minecraft ignorent les drapeaux de largeur (%02d) : zéros complétés ici
             return WmiText.s("wmi.time.format24", String.format("%02d", hours), String.format("%02d", minutes));
         }
-        int h12 = hours % 12 == 0 ? 12 : hours % 12;
+        int h12 = WorldClock.twelveHour(hours);
         return WmiText.s("wmi.time.format12", h12, String.format("%02d", minutes), WmiText.s(hours < 12 ? "wmi.time.am" : "wmi.time.pm"));
     }
 

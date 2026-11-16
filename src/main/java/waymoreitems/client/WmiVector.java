@@ -172,13 +172,13 @@ public final class WmiVector {
                 x, y, w, h, radius, param, margin, color, screenUv, guiW, guiH, scissor(g)));
     }
 
-    // Le transformateur d'accès (META-INF/accesstransformer.cfg) rend publics le tampon et la pile de découpe.
+    // Le transformateur d'accès (META-INF/accesstransformer.cfg) rend public le tampon d'interface.
     private static GuiRenderState renderState(GuiGraphicsExtractor g) {
         return g.guiRenderState;
     }
 
     private static @Nullable ScreenRectangle scissor(GuiGraphicsExtractor g) {
-        return g.scissorStack.peek();
+        return g.peekScissorStack();
     }
 
     /** Pixels réels par unité de dessin : taille du jeu, multipliée par le facteur de {@link WmiUiScale} dans sa portée. */

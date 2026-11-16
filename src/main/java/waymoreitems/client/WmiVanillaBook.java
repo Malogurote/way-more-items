@@ -1,7 +1,6 @@
 package waymoreitems.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -31,7 +30,6 @@ import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import org.slf4j.Logger;
 import waymoreitems.WmiMod;
 import waymoreitems.WmiPayloads;
 import waymoreitems.core.CatalogItem;
@@ -44,7 +42,6 @@ import waymoreitems.core.ThemePalette;
 import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -63,7 +60,6 @@ import static waymoreitems.client.WmiDraw.*;
 
 /** Cahier de recettes de Minecraft : ouvert ou fermé selon le réglage, le choix du joueur étant suivi. */
 final class WmiVanillaBook {
-    private static final Logger LOGGER = LogUtils.getLogger();
 
     private final WmiSettings settings;
     private Screen lastSyncedBookScreen = null;
@@ -78,22 +74,8 @@ final class WmiVanillaBook {
     }
 
     RecipeBookComponent<?> extractRecipeBookComponent(Screen screen) {
-        if (!(screen instanceof AbstractRecipeBookScreen<?> rbs)) {
-            return null;
-        }
-        for (Class<?> c = rbs.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
-            for (Field f : c.getDeclaredFields()) {
-                if (RecipeBookComponent.class.isAssignableFrom(f.getType())) {
-                    try {
-                        f.setAccessible(true);
-                        return (RecipeBookComponent<?>) f.get(rbs);
-                    } catch (ReflectiveOperationException | RuntimeException e) {
-                        LOGGER.debug("Could not read the recipe book field", e);
-                    }
-                }
-            }
-        }
-        return null;
+        // Champ ouvert par le transformateur d'accès (META-INF/accesstransformer.cfg)
+        return screen instanceof AbstractRecipeBookScreen<?> rbs ? rbs.recipeBookComponent : null;
     }
 
     ImageButton findVanillaRecipeBookButton(Screen screen) {
