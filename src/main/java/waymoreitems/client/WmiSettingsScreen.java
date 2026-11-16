@@ -224,7 +224,7 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
         // ---- Apparence
         boolean custom = th.isCustom();
         r.add(row(Tab.APPEARANCE, "theme", "theme", new Stepper(s.presetTheme.label(), () -> stepTheme(-1), () -> stepTheme(1)),
-                () -> s.selectTheme(WmiTheme.BLANC), custom ? t("wmi.settings.theme.custom_reason") : null));
+                () -> s.selectTheme(WmiTheme.ANTHRACITE), custom ? t("wmi.settings.theme.custom_reason") : null));
         r.add(row(Tab.APPEARANCE, "theme", "customize", toggle(custom, s::setCustomize), () -> s.setCustomize(false)));
         if (custom) {
             r.add(row(Tab.APPEARANCE, "theme", "custom_color", new ColorPick(), () -> {
@@ -301,7 +301,7 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
         r.add(row(Tab.SCREEN, "hud_clocks", "corner_widget", toggle(s.hudCornerWidget(), s::setHudCornerWidget),
                 () -> s.setHudCornerWidget(true)));
         r.add(row(Tab.SCREEN, "hud_clocks", "clock_in_game", toggle(s.hudClockInGame(), s::setHudClockInGame),
-                () -> s.setHudClockInGame(true)));
+                () -> s.setHudClockInGame(false)));
         r.add(row(Tab.SCREEN, "hud_clocks", "clock_mod", toggle(s.hudClockShowMod(), s::setHudClockShowMod),
                 () -> s.setHudClockShowMod(false), !s.hudClockInGame() ? t("wmi.settings.clock_in_game.reason") : null));
         r.add(row(Tab.WIDGET, "clock_display", "time_format", choice(s.timeFormat.ordinal(),

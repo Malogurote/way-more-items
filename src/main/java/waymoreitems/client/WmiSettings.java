@@ -71,9 +71,9 @@ public final class WmiSettings {
     /** Objectifs tels qu'enregistrés la dernière fois (l'enregistrement différé compare à cette valeur). */
     String lastSavedGoals = "";
 
-    WmiTheme currentTheme = WmiTheme.BLANC;
+    WmiTheme currentTheme = WmiTheme.ANTHRACITE;
     /** Dernier thème prédéfini choisi : rétabli quand « Personnaliser » est désactivé. */
-    WmiTheme presetTheme = WmiTheme.BLANC;
+    WmiTheme presetTheme = WmiTheme.ANTHRACITE;
     /** Couleur du thème « Personnalisé » en teinte, saturation, valeur (0 à 1) ; par défaut un bleu moyen. */
     float customHue = 0.61F;
     float customSat = 0.62F;
@@ -93,7 +93,7 @@ public final class WmiSettings {
     /** Lignes verticales du widget : lever et coucher du soleil (gauche), de la lune (droite). */
     boolean showSunMoonLines = true;
     /** Horloge compacte en haut de l'écran de jeu (hors inventaire) et, en option, mod d'origine du biome. */
-    boolean hudClockInGame = true;
+    boolean hudClockInGame = false;
     boolean hudClockShowMod = false;
     /** Widget de l'heure au plus petit cran dans le coin haut gauche de l'écran de jeu, Notes juste dessous. */
     boolean hudCornerWidget = true;
@@ -218,12 +218,12 @@ public final class WmiSettings {
             } catch (NumberFormatException ignored) {
             }
         }
-        String th = props.string("theme", WmiTheme.BLANC.name());
+        String th = props.string("theme", WmiTheme.ANTHRACITE.name());
         WmiTheme preset = WmiTheme.preset(th);
         currentTheme = WmiTheme.CUSTOM_KEY.equals(th) ? WmiTheme.custom(customColor())
-                : (preset != null ? preset : WmiTheme.BLANC);
+                : (preset != null ? preset : WmiTheme.ANTHRACITE);
         WmiTheme savedPreset = WmiTheme.preset(props.string("presetTheme", th));
-        presetTheme = currentTheme.isCustom() ? (savedPreset != null ? savedPreset : WmiTheme.BLANC) : currentTheme;
+        presetTheme = currentTheme.isCustom() ? (savedPreset != null ? savedPreset : WmiTheme.ANTHRACITE) : currentTheme;
         WmiVector.setVanillaTheme(currentTheme.vanilla());
         sortOrder = props.enumValue("sortOrder", InventorySorter.SortOrder.class, InventorySorter.SortOrder.MOD_CATEGORY_NAME);
         rightPanelWidthRatio = props.decimal("rightPanelWidthRatio", 0.275, 0.16, 0.65);
@@ -235,7 +235,7 @@ public final class WmiSettings {
         toolbarCollapsed = props.bool("toolbarCollapsed", false);
         toolbarLabels = props.bool("toolbarLabels", false);
         showSunMoonLines = props.bool("hudSunMoonLines", true);
-        hudClockInGame = props.bool("hudClockInGame", true);
+        hudClockInGame = props.bool("hudClockInGame", false);
         hudClockShowMod = props.bool("hudClockShowMod", false);
         hudCornerWidget = props.bool("hudCornerWidget", true);
         uiScale = props.integer("uiScale", UI_SCALE_AUTO, UI_SCALE_AUTO, UI_SCALE_MAX);

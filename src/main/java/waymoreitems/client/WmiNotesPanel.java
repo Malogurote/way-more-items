@@ -364,7 +364,8 @@ final class WmiNotesPanel {
     /**
      * Ligne d'objectif, discrète : icône de 8 unités et texte au cran 75 %, indentée selon la profondeur. Objet
      * principal suivi de « ×quantité », ingrédients et objets libres de « possédé/voulu », en vert une fois réunis.
-     * Dans l'inventaire : clic sur une branche dépliable, « x » pour retirer un objectif.
+     * Dans l'inventaire : clic sur le signe ou l'icône d'une branche dépliable pour la plier, « x » pour retirer
+     * un objectif ; le nom de l'objet répond comme le catalogue (touches des recettes et usages, clics, menu).
      */
     void renderNotesLine(GuiGraphicsExtractor g, Font font, PinnedChecklist.Line l, int x, int ry, int boxW,
                                  int mouseX, int mouseY, boolean inScreen) {
@@ -393,9 +394,15 @@ final class WmiNotesPanel {
         if (!inScreen) {
             return;
         }
+        // Le nom se comporte comme une case du catalogue (recettes, usages, menu, infobulle) : le signe et
+        // l'icône d'une branche dépliable restent réservés au pliage
+        int itemZoneX = l.expandable() ? nameX : ix;
+        if (!st.isEmpty() && mouseX >= itemZoneX && mouseX < right && mouseY >= ry && mouseY < ry + LINE_PITCH) {
+            o.panel.hoveredOverlayItemId = l.itemId();
+        }
         if (l.expandable()) {
             String key = l.key();
-            o.buttons.drawn.add(new QuickButton(x + 3, ry, right - x - 3, LINE_PITCH, "",
+            o.buttons.drawn.add(new QuickButton(x + 3, ry, nameX - x - 3, LINE_PITCH, "",
                     WmiText.s(l.expanded() ? "wmi.notes.branch_collapse_tip" : "wmi.notes.branch_expand_tip"),
                     () -> checklist.toggleExpanded(key), null));
         }
