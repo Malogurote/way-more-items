@@ -344,8 +344,6 @@
   "wmi.tree.step_count": "%s Schritt",
   "wmi.tree.step_count.many": "%s Schritte",
   "wmi.tree.machine_seconds": "%s s Maschinenzeit",
-  "wmi.tree.recipe_choice_tip": "Anderes Rezept für diesen Schritt, für diesen Gegenstand in allen Bäumen gemerkt (Rechtsklick: automatische Wahl)",
-  "wmi.tree.recipe_choice_tip_chosen": "Für diesen Gegenstand in allen Bäumen gewähltes Rezept (Pfeile: anderes Rezept, Rechtsklick: zurück zur automatischen Wahl)",
   "wmi.recipe.give_count": "%s× geben",
   "wmi.recipe.give_tip": "Legt einen Stapel in dein Inventar",
   "wmi.cmd.prefix": "[WMI] %s",

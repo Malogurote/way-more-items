@@ -775,10 +775,6 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         clickZones.add(new ClickableZone(left, y + 3, arrowW, 16, () -> cycleStepRecipe(itemId, -1)));
         clickZones.add(new ClickableZone(right - arrowW, y + 3, arrowW, 16, () -> cycleStepRecipe(itemId, 1)));
         rightClickZones.add(new ClickableZone(left, y + 3, totalW, 16, () -> resetStepRecipe(itemId)));
-        if (mouseX >= left && mouseX < right && mouseY >= y + 3 && mouseY < y + 19) {
-            g.setTooltipForNextFrame(WmiText.c(chosen ? "wmi.tree.recipe_choice_tip_chosen" : "wmi.tree.recipe_choice_tip"),
-                    WmiUiScale.real(mouseX), WmiUiScale.real(mouseY));
-        }
         return left;
     }
 
