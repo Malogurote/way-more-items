@@ -52,11 +52,25 @@ repositories {
             includeGroup 'mezz.jei'
         }
     }
+    // JUnit 5 (EPL 2.0), pour les tests seulement : jamais embarqué dans le jar.
+    mavenCentral {
+        content {
+            includeGroup 'org.junit'
+            includeGroup 'org.junit.jupiter'
+            includeGroup 'org.junit.platform'
+            includeGroup 'org.opentest4j'
+            includeGroup 'org.apiguardian'
+        }
+    }
 }
 
 dependencies {
     compileOnly "mezz.jei:jei-26.3-common-api:31.17.0.113"
     compileOnly "mezz.jei:jei-26.3-neoforge-api:31.17.0.113"
+
+    testImplementation platform('org.junit:junit-bom:5.14.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
@@ -77,15 +91,26 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
 sourceSets.main.resources.srcDir generateModMetadata
 neoForge.ideSyncTask generateModMetadata
 
-// Tests du noyau de Way More Items en Java pur (sans bibliothèque de test) : gradle wmiTests, lancés aussi par check et build
-tasks.register('wmiTests', JavaExec) {
+// Tests du noyau de Way More Items (JUnit 5, une vérification = un cas) : gradle test, lancés aussi par check et build
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    systemProperty 'wmi.projectDir', projectDir.absolutePath
+    testLogging {
+        events 'failed'
+        exceptionFormat 'short'
+    }
+    afterSuite { desc, result ->
+        if (desc.parent == null) {
+            println "WmiTests : ${result.testCount} verifications, ${result.failedTestCount} echec(s)."
+        }
+    }
+}
+// Ancien nom de la tâche, gardé pour les scripts : gradle wmiTests = gradle test
+tasks.register('wmiTests') {
     group = 'verification'
     description = 'Runs the core tests of Way More Items.'
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'waymoreitems.core.WmiTests'
-    systemProperty 'wmi.projectDir', projectDir.absolutePath
+    dependsOn 'test'
 }
-tasks.named('check') { dependsOn 'wmiTests' }
 
 // Cloisonnement : la compilation échoue si le code ou les ressources de WMI contiennent un renvoi interdit
 // (propriété Gradle « wmiForbiddenRefs », mots séparés par des virgules, facultative), ou si le noyau cite Minecraft.
