@@ -110,7 +110,6 @@ public final class WmiClient {
                     return 1;
                 }))
                 .then(Commands.literal("coverage").executes(WmiClient::coverageCommand))
-                .then(Commands.literal("couverture").executes(WmiClient::coverageCommand))
                 .then(Commands.literal("mise_en_page").executes(ctx -> {
                     String msg = WmiLayoutRuntime.reload(true);
                     // Les comptes rendus de réussite ou d'erreur sont déjà affichés par reload
