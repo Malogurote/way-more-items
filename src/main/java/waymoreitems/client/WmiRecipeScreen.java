@@ -282,40 +282,13 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         }
         List<RecipeEntry> list = recipesByType.getOrDefault(availableTypes.get(Math.min(currentTab, availableTypes.size() - 1)), List.of());
         int onPage = Math.max(1, Math.min(RECIPES_PER_PAGE, list.size() - currentPage * RECIPES_PER_PAGE));
-        return 48 + (tabRows() - 1) * TAB_ROW_STEP + onPage * 66 + 22;
+        return 48 + onPage * 66 + 22;
     }
 
-    /** Écart vertical entre deux rangées d'onglets de procédé. */
-    private static final int TAB_ROW_STEP = 21;
     /** Largeur de la fenêtre des recettes et usages. */
     private static final int RECIPES_BOX_W = 252;
-
-    /**
-     * Disposition des onglets de procédé sur une ou plusieurs rangées (ceux qui ne tiennent pas passent à la ligne) :
-     * pour chaque onglet, {décalage horizontal depuis le bord gauche de la fenêtre, rangée, largeur}.
-     */
-    private List<int[]> tabLayout() {
-        List<int[]> out = new ArrayList<>(availableTypes.size());
-        int x = 6;
-        int row = 0;
-        for (String typeId : availableTypes) {
-            List<RecipeEntry> typeRecipes = recipesByType.get(typeId);
-            String catTitle = typeRecipes.get(0).categoryName();
-            int tw = Math.min(86, WmiVector.width(font, catTitle) + 24);
-            if (x > 6 && x + tw > RECIPES_BOX_W - 6) {
-                row++;
-                x = 6;
-            }
-            out.add(new int[] {x, row, tw});
-            x += tw + 3;
-        }
-        return out;
-    }
-
-    private int tabRows() {
-        List<int[]> layout = tabLayout();
-        return layout.isEmpty() ? 1 : layout.get(layout.size() - 1)[1] + 1;
-    }
+    /** Côté des onglets de procédé, carrés posés en colonne contre le bord gauche de la fenêtre. */
+    private static final int TYPE_TAB = 22;
 
     private void renderRecipesView(GuiGraphicsExtractor g, int x0, int y0, int boxW, int boxH, int mouseX, int mouseY) {
         WmiTheme th = theme();
@@ -362,33 +335,12 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             return;
         }
 
-        // Onglets des procédés / machines, sur autant de rangées qu'il le faut (la fenêtre grandit d'autant)
-        List<int[]> tabs = tabLayout();
-        int rows = tabs.isEmpty() ? 1 : tabs.get(tabs.size() - 1)[1] + 1;
-        for (int i = 0; i < availableTypes.size(); i++) {
-            String typeId = availableTypes.get(i);
-            List<RecipeEntry> typeRecipes = recipesByType.get(typeId);
-            String catTitle = typeRecipes.get(0).categoryName();
-            int tabX = x0 + tabs.get(i)[0];
-            int tabY = y0 + 26 + tabs.get(i)[1] * TAB_ROW_STEP;
-            int tw = tabs.get(i)[2];
-            boolean active = (i == currentTab);
-            int bg = active ? th.accentSoft : th.slotBg;
-            int border = active ? th.accent : th.innerBorder;
-            WmiDraw.drawBox(g, tabX, tabY, tw, 18, bg, border);
-            if (!typeRecipes.get(0).workstations().isEmpty()) {
-                ItemStack wsStack = WmiClientIndex.stackFor(typeRecipes.get(0).workstations().get(0));
-                if (!wsStack.isEmpty()) {
-                    g.fakeItem(wsStack, tabX + 2, tabY + 1);
-                }
-            }
-            WmiDraw.drawText(g, font, trimToWidth(catTitle, tw - 22), tabX + 20, tabY + 5, active ? th.accent : th.textMain);
-            final int tabIdx = i;
-            clickZones.add(new ClickableZone(tabX, tabY, tw, 18, () -> {
-                currentTab = tabIdx;
-                currentPage = 0;
-            }));
-        }
+        // Onglets des procédés : carrés à l'icône de la machine, en colonne contre le bord gauche de la fenêtre ;
+        // nom du procédé actif rappelé en haut de la fenêtre
+        drawTypeTabs(g, x0, y0, boxH, mouseX, mouseY);
+        List<RecipeEntry> shown = recipesByType.get(availableTypes.get(currentTab));
+        WmiDraw.drawText(g, font, trimToWidth(shown.get(0).categoryName() + "  (" + shown.size() + ")", boxW - 16),
+                x0 + 8, y0 + 31, th.accent);
 
         String activeType = availableTypes.get(currentTab);
         List<RecipeEntry> activeList = recipesByType.getOrDefault(activeType, List.of());
@@ -398,7 +350,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         }
 
         int startIdx = currentPage * RECIPES_PER_PAGE;
-        int cardY = y0 + 48 + (rows - 1) * TAB_ROW_STEP;
+        int cardY = y0 + 48;
         for (int i = startIdx; i < Math.min(activeList.size(), startIdx + RECIPES_PER_PAGE); i++) {
             RecipeEntry rec = activeList.get(i);
             renderRecipeCard(g, rec, x0 + 8, cardY, boxW - 16, 62, mouseX, mouseY);
@@ -998,6 +950,37 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
                     WmiText.c("wmi.recipe.give_tip").withStyle(net.minecraft.ChatFormatting.GRAY));
             sideTab(g, th, tx, bottomY, size, size, st, false, true, tip, mouseX, mouseY,
                     () -> WmiClient.overlay().giveItemToPlayer(targetItemId, count));
+        }
+    }
+
+    /**
+     * Onglets des procédés en carrés, de haut en bas contre le bord gauche de la fenêtre ; une colonne pleine (hauteur
+     * de la fenêtre atteinte) en ouvre une autre plus à gauche. Icône : la machine du procédé, sinon son premier
+     * résultat ; infobulle : nom du procédé et nombre de recettes.
+     */
+    private void drawTypeTabs(GuiGraphicsExtractor g, int x0, int y0, int boxH, int mouseX, int mouseY) {
+        WmiTheme th = theme();
+        int perColumn = Math.max(1, (boxH + 3) / (TYPE_TAB + 3));
+        for (int i = 0; i < availableTypes.size(); i++) {
+            List<RecipeEntry> typeRecipes = recipesByType.get(availableTypes.get(i));
+            RecipeEntry first = typeRecipes.get(0);
+            ItemStack icon = ItemStack.EMPTY;
+            if (!first.workstations().isEmpty()) {
+                icon = WmiClientIndex.stackFor(first.workstations().get(0));
+            }
+            if (icon.isEmpty() && !first.outputs().isEmpty()) {
+                icon = WmiClientIndex.stackFor(first.outputs().get(0).itemId());
+            }
+            int col = i / perColumn;
+            int tx = x0 - 4 - TYPE_TAB - col * (TYPE_TAB + 3);
+            int ty = y0 + (i % perColumn) * (TYPE_TAB + 3);
+            final int tabIdx = i;
+            sideTab(g, th, tx, ty, TYPE_TAB, TYPE_TAB, icon, i == currentTab, false,
+                    List.of(Component.literal(first.categoryName() + "  (" + typeRecipes.size() + ")")), mouseX, mouseY,
+                    () -> {
+                        currentTab = tabIdx;
+                        currentPage = 0;
+                    });
         }
     }
 
