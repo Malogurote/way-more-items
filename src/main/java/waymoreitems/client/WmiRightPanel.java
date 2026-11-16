@@ -470,6 +470,7 @@ final class WmiRightPanel {
         if (key.equals(catalogKey)) {
             return catalogCache;
         }
+        long tr = WmiPerf.start();
         List<CatalogItem> allMatched = idx.search(searchQuery, inv, false, activeStation);
         List<CatalogItem> items = new ArrayList<>(allMatched.size());
         for (CatalogItem it : allMatched) {
@@ -489,6 +490,7 @@ final class WmiRightPanel {
         }
         catalogKey = key;
         catalogCache = List.copyOf(items);
+        WmiPerf.stop(WmiPerf.CATALOG_REBUILD, tr);
         return catalogCache;
     }
 
@@ -501,9 +503,11 @@ final class WmiRightPanel {
             int mouseX,
             int mouseY
     ) {
+        long tl = WmiPerf.start();
         Map<String, Integer> inv = o.snapshotPlayerInventory();
         String activeStation = inferWorkstationFromScreen(screen);
         List<CatalogItem> items = catalogItems(inv, activeStation);
+        WmiPerf.stop(WmiPerf.CATALOG_LIST, tl);
 
         int icon = settings.gridIconSize;
         int slotStep = icon + 2;

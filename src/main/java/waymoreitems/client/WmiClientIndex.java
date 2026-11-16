@@ -196,7 +196,9 @@ public final class WmiClientIndex {
         ContextMap context = (mc != null && mc.level != null) ? SlotDisplayContext.fromLevel(mc.level) : ContextMap.EMPTY;
         boolean tagsBound = BuiltInRegistries.ITEM.getTags().findAny().isPresent();
 
+        long t0 = WmiPerf.start();
         List<CatalogItem> catalog = buildCatalog(mc);
+        long t1 = WmiPerf.start();
         List<RecipeEntry> entries = new ArrayList<>();
 
         RecipeMap map = pendingRecipeMap;
@@ -240,6 +242,8 @@ public final class WmiClientIndex {
             com.mojang.logging.LogUtils.getLogger().info(report.toString());
         }
 
+        long t2 = WmiPerf.start();
+        int recipesRead = entries.size();
         for (WmiRegistry.CustomRecipeExtractor ext : WmiRegistry.extractors()) {
             try {
                 List<RecipeEntry> custom = ext.extractRecipes();
@@ -250,10 +254,17 @@ public final class WmiClientIndex {
             }
         }
 
+        long t3 = WmiPerf.start();
         currentIndex = new RecipeIndex(catalog, entries);
+        long t4 = WmiPerf.start();
         currentCreativeTabs = buildCreativeTabs(mc);
         builtWithBoundTags = tagsBound;
         needsRebuild = false;
+        if (t0 != 0L) {
+            long t5 = System.nanoTime();
+            WmiPerf.logRebuild(t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, catalog.size(), recipesRead,
+                    coverage.values().stream().mapToInt(c -> c[0]).sum());
+        }
     }
 
     private static List<CreativeTabEntry> buildCreativeTabs(Minecraft mc) {

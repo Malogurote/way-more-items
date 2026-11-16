@@ -26,6 +26,8 @@ neoForge {
             client()
             // Dossier de jeu : propriété Gradle « wmiGameDir » (gradle.properties de l'utilisateur), « run » par défaut.
             gameDirectory = file(providers.gradleProperty('wmiGameDir').getOrElse('run'))
+            // Mesures de performance (journal du jeu) : -PwmiPerf=true, désactivées par défaut.
+            systemProperty 'waymoreitems.perf', providers.gradleProperty('wmiPerf').getOrElse('false')
             if (project.hasProperty('quickPlay')) {
                 programArgument '--quickPlaySingleplayer'
                 programArgument project.property('quickPlay').toString()

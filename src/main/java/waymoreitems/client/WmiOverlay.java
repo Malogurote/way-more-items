@@ -285,6 +285,20 @@ public final class WmiOverlay {
     // ==================== SUPERPOSITION SUR LES CONTENEURS / INVENTAIRE ====================
 
     public void renderContainerOverlay(AbstractContainerScreen<?> screen, GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        if (!WmiPerf.enabled()) {
+            renderContainerOverlayBody(screen, g, mouseX, mouseY);
+            return;
+        }
+        WmiPerf.frame(!visible ? "hidden" : jeiModeActive() ? "JEI" : "WMI");
+        long t = WmiPerf.start();
+        try {
+            renderContainerOverlayBody(screen, g, mouseX, mouseY);
+        } finally {
+            WmiPerf.stop(WmiPerf.OVERLAY, t);
+        }
+    }
+
+    private void renderContainerOverlayBody(AbstractContainerScreen<?> screen, GuiGraphicsExtractor g, int mouseX, int mouseY) {
         panel.hoveredOverlayItemId = null;
         input.syncTextInput(screen);
         buttons.drawn.clear();
@@ -378,7 +392,9 @@ public final class WmiOverlay {
         if (jeiModeActive()) {
             panel.bounds = null;
         } else if (lay.drawable("rightPanel")) {
+            long tp = WmiPerf.start();
             panel.renderRightBinder(screen, g, font, rp.x(), rp.y(), rp.w(), rp.h(), mouseX, mouseY);
+            WmiPerf.stop(WmiPerf.RIGHT_PANEL, tp);
             rightDrawn = true;
         }
 
