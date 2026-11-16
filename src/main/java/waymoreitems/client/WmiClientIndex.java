@@ -40,7 +40,7 @@ import net.minecraft.world.level.block.EntityBlock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import waymoreitems.api.RecipeLayoutSpec;
-import waymoreitems.api.WmiRegistry;
+import waymoreitems.core.WmiRegistry;
 import waymoreitems.core.CatalogItem;
 import waymoreitems.core.CoverageReport;
 import waymoreitems.core.ItemCategories;
@@ -284,6 +284,9 @@ public final class WmiClientIndex {
 
         IndexBuild(Minecraft mc) {
             this.mc = mc;
+            // Extensions des autres mods et mises en page JSON, lues avant la conversion des recettes
+            WmiExtensions.loadOnce();
+            WmiExtensions.reloadJsonLayouts(mc == null ? null : mc.getResourceManager());
             builtWithLanguage = Language.getInstance();
             builtWithBoundTags = BuiltInRegistries.ITEM.getTags().findAny().isPresent();
             needsRebuild = false;
@@ -351,16 +354,8 @@ public final class WmiClientIndex {
                 } catch (Exception e) {
                     LOGGER.debug("Could not build the fluid container recipes", e);
                 }
-                for (WmiRegistry.CustomRecipeExtractor ext : WmiRegistry.extractors()) {
-                    try {
-                        List<RecipeEntry> custom = ext.extractRecipes();
-                        if (custom != null) {
-                            entries.addAll(custom);
-                        }
-                    } catch (Exception e) {
-                        LOGGER.debug("A custom recipe extractor failed", e);
-                    }
-                }
+                // Recettes et fiches des extensions des autres mods (API publique)
+                entries.addAll(WmiExtensions.collectRecipes(type -> resolveCategoryName(type, WmiRegistry.layout(type))));
                 // Source externe (navigateur de recettes installé à côté) : seulement les recettes que WMI n'a pas lues
                 for (RecipeEntry e : entries) {
                     knownIds.add(e.id());

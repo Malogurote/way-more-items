@@ -336,6 +336,7 @@
   "wmi.recipe.tree_added": "Baum zu den Notizen hinzugefügt",
   "wmi.recipe.place_in_grid": "In Raster legen",
   "wmi.recipe.place_in_grid_tip": "Legt die Zutaten aus deinem Inventar in das geöffnete Raster",
+  "wmi.recipe.information": "Informationen",
   "wmi.recipe.added_none": "Keine Zutat",
   "wmi.recipe.added": "%s Gegenstand zu den Notizen hinzugefügt",
   "wmi.recipe.added.many": "%s Gegenstände zu den Notizen hinzugefügt",

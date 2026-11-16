@@ -3,9 +3,15 @@ package waymoreitems.client;
 import com.mojang.logging.LogUtils;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLPaths;
+import net.neoforged.neoforgespi.language.ModFileScanData;
 import org.slf4j.Logger;
 
+import java.lang.annotation.Annotation;
+import java.lang.annotation.ElementType;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.function.BiConsumer;
 
 /**
@@ -62,5 +68,29 @@ public final class WmiPlatform {
     /** Parcourt les mods chargés : identifiant et nom affiché. */
     public static void forEachMod(BiConsumer<String, String> action) {
         ModList.get().getMods().forEach(info -> action.accept(info.getModId(), info.getDisplayName()));
+    }
+
+    /**
+     * Classe portant l'annotation cherchée, relevée par l'analyse des mods sans être chargée.
+     *
+     * @param className nom binaire de la classe
+     * @param values    valeurs explicites de l'annotation (les valeurs par défaut n'y figurent pas)
+     */
+    public record AnnotatedClass(String className, Map<String, Object> values) {
+    }
+
+    /** Classes de tous les mods portant l'annotation {@code annotation} (sur le type), dans l'ordre des mods. */
+    public static List<AnnotatedClass> annotatedClasses(Class<? extends Annotation> annotation) {
+        List<AnnotatedClass> out = new ArrayList<>();
+        ModList ml = ModList.get();
+        if (ml == null) {
+            return out;
+        }
+        for (ModFileScanData data : ml.getAllScanData()) {
+            data.getAnnotatedBy(annotation, ElementType.TYPE)
+                    .forEach(a -> out.add(new AnnotatedClass(a.clazz().getClassName(),
+                            a.annotationData() == null ? Map.of() : a.annotationData())));
+        }
+        return out;
     }
 }

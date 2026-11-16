@@ -1,7 +1,6 @@
 package waymoreitems.core;
 
 import waymoreitems.api.RecipeLayoutSpec;
-import waymoreitems.api.WmiRegistry;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -883,5 +882,6 @@ final class WmiTests {
         FluidTests.run(WmiTests::check);
         DedicatedRecipeTests.run(WmiTests::check);
         CoreLogicTests.run(WmiTests::check);
+        ApiTests.run(WmiTests::check);
     }
 }

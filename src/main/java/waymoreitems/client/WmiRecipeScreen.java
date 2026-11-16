@@ -16,7 +16,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
 import waymoreitems.WmiPayloads;
 import waymoreitems.api.RecipeLayoutSpec;
-import waymoreitems.api.WmiRegistry;
+import waymoreitems.api.WmiIngredient;
+import waymoreitems.core.WmiRegistry;
 import waymoreitems.core.CatalogItem;
 import waymoreitems.core.CommandPalette;
 import waymoreitems.core.CraftPlanCache;
@@ -433,6 +434,9 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             for (RecipeLayoutSpec.ProgressArrow arr : layout.arrows()) {
                 drawAnimatedArrow(g, cx + arr.x(), cy + arr.y() - 2, arr.width());
             }
+            for (RecipeLayoutSpec.Gauge gauge : layout.gauges()) {
+                drawGauge(g, rec, gauge, cx + gauge.x(), cy + gauge.y() - 2, mouseX, mouseY);
+            }
         } else {
             int ix = cx + 8;
             int iy = cy + 6;
@@ -512,11 +516,13 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
     }
 
     /**
-     * Lignes de texte des recettes lues par {@link WmiDedicatedRecipes} (procédé, fiche d'information), coupées à la
-     * largeur libre de la carte : à droite des produits, ou dès la flèche quand la recette n'en a pas.
+     * Lignes de texte de la recette, coupées à la largeur libre de la carte : à droite des produits, ou dès la flèche
+     * quand la recette n'en a pas. Une seule source : lecture dédiée ({@link WmiDedicatedRecipes} : procédé, fiche
+     * d'information), puis lignes fournies par les extensions des autres mods ({@link WmiExtensions}).
      */
     private void drawRecipeNotes(GuiGraphicsExtractor g, RecipeEntry rec, int cx, int cy, int cw, int ch, int metaX, int metaY) {
-        List<String> notes = WmiDedicatedRecipes.notes(rec.id());
+        List<String> notes = new ArrayList<>(WmiDedicatedRecipes.notes(rec.id()));
+        notes.addAll(WmiExtensions.notes(rec.id()));
         if (notes.isEmpty()) {
             return;
         }
@@ -583,6 +589,55 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         CraftTreeCalculator.CraftPlan plan = PLANS.plan(WmiClientIndex.get(), out, count, playerInventory, pref);
         checklist.pinPlan(out, count, plan);
         pinnedFeedbackText = WmiText.s("wmi.recipe.tree_added");
+    }
+
+    /**
+     * Jauge d'une mise en page : énergie (remplissage animé, cotes à côté de la carte) ou réservoir (quantité de
+     * l'entrée ou du produit désigné ; survol comme une case).
+     */
+    private void drawGauge(GuiGraphicsExtractor g, RecipeEntry rec, RecipeLayoutSpec.Gauge gauge, int x, int y,
+                           int mouseX, int mouseY) {
+        WmiTheme th = theme();
+        int w = gauge.width();
+        int h = gauge.height();
+        WmiDraw.drawBox(g, x, y, w, h, th.slotBg, th.border);
+        String key = null;
+        int amount = 0;
+        int fill;
+        int color;
+        if (gauge.kind() == RecipeLayoutSpec.GaugeKind.ENERGY) {
+            if (rec.energyPerTick() <= 0 && rec.totalEnergy() <= 0) {
+                return;
+            }
+            long period = 2000L;
+            fill = (int) ((h - 2) * (1.0 - (System.currentTimeMillis() % period) / (double) period));
+            color = th.accent;
+        } else {
+            if (gauge.role() == RecipeLayoutSpec.SlotRole.OUTPUT) {
+                if (gauge.index() < rec.outputs().size()) {
+                    key = rec.outputs().get(gauge.index()).itemId();
+                    amount = rec.outputs().get(gauge.index()).count();
+                }
+            } else if (gauge.index() < rec.inputs().size()) {
+                RecipeEntry.IngredientSlot in = rec.inputs().get(gauge.index());
+                key = in.alternatives().get(0);
+                amount = in.count();
+            }
+            if (key == null) {
+                return;
+            }
+            fill = h - 2;
+            color = th.accentSoft;
+        }
+        if (fill > 0) {
+            WmiDraw.bar(g, x + 1, y + h - 1 - fill, x + w - 1, y + h - 1, color);
+        }
+        if (key != null && mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h) {
+            hoveredItemId = key;
+            WmiIngredient.Kind kind = WmiRegistry.ingredientKind(WmiIngredient.kindOf(key));
+            String unit = kind == null || kind.unit().isEmpty() ? "" : " " + kind.unit();
+            WmiDraw.drawText(g, font, amount + unit, x + w + 2, y + h - 8, th.textMuted);
+        }
     }
 
     private void drawAnimatedArrow(GuiGraphicsExtractor g, int x, int y, int w) {
