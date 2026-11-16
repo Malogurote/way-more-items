@@ -244,7 +244,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             boxW = Math.min(width - 70, 340);
             boxH = Math.min(height - 36, craftTreeHeight(boxW)); // place du titre au-dessus
         } else {
-            boxW = 252;
+            boxW = RECIPES_BOX_W;
             boxH = recipesViewHeight();
         }
         int x0 = (width - boxW) / 2;
@@ -282,7 +282,39 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         }
         List<RecipeEntry> list = recipesByType.getOrDefault(availableTypes.get(Math.min(currentTab, availableTypes.size() - 1)), List.of());
         int onPage = Math.max(1, Math.min(RECIPES_PER_PAGE, list.size() - currentPage * RECIPES_PER_PAGE));
-        return 48 + onPage * 66 + 22;
+        return 48 + (tabRows() - 1) * TAB_ROW_STEP + onPage * 66 + 22;
+    }
+
+    /** Écart vertical entre deux rangées d'onglets de procédé. */
+    private static final int TAB_ROW_STEP = 21;
+    /** Largeur de la fenêtre des recettes et usages. */
+    private static final int RECIPES_BOX_W = 252;
+
+    /**
+     * Disposition des onglets de procédé sur une ou plusieurs rangées (ceux qui ne tiennent pas passent à la ligne) :
+     * pour chaque onglet, {décalage horizontal depuis le bord gauche de la fenêtre, rangée, largeur}.
+     */
+    private List<int[]> tabLayout() {
+        List<int[]> out = new ArrayList<>(availableTypes.size());
+        int x = 6;
+        int row = 0;
+        for (String typeId : availableTypes) {
+            List<RecipeEntry> typeRecipes = recipesByType.get(typeId);
+            String catTitle = typeRecipes.get(0).categoryName();
+            int tw = Math.min(86, WmiVector.width(font, catTitle) + 24);
+            if (x > 6 && x + tw > RECIPES_BOX_W - 6) {
+                row++;
+                x = 6;
+            }
+            out.add(new int[] {x, row, tw});
+            x += tw + 3;
+        }
+        return out;
+    }
+
+    private int tabRows() {
+        List<int[]> layout = tabLayout();
+        return layout.isEmpty() ? 1 : layout.get(layout.size() - 1)[1] + 1;
     }
 
     private void renderRecipesView(GuiGraphicsExtractor g, int x0, int y0, int boxW, int boxH, int mouseX, int mouseY) {
@@ -330,17 +362,16 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             return;
         }
 
-        // Onglets des procédés / machines
-        int tabX = x0 + 6;
-        int tabY = y0 + 26;
+        // Onglets des procédés / machines, sur autant de rangées qu'il le faut (la fenêtre grandit d'autant)
+        List<int[]> tabs = tabLayout();
+        int rows = tabs.isEmpty() ? 1 : tabs.get(tabs.size() - 1)[1] + 1;
         for (int i = 0; i < availableTypes.size(); i++) {
             String typeId = availableTypes.get(i);
             List<RecipeEntry> typeRecipes = recipesByType.get(typeId);
             String catTitle = typeRecipes.get(0).categoryName();
-            int tw = Math.min(86, WmiVector.width(font, catTitle) + 24);
-            if (tabX + tw > x0 + boxW - 6) {
-                break;
-            }
+            int tabX = x0 + tabs.get(i)[0];
+            int tabY = y0 + 26 + tabs.get(i)[1] * TAB_ROW_STEP;
+            int tw = tabs.get(i)[2];
             boolean active = (i == currentTab);
             int bg = active ? th.accentSoft : th.slotBg;
             int border = active ? th.accent : th.innerBorder;
@@ -357,7 +388,6 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
                 currentTab = tabIdx;
                 currentPage = 0;
             }));
-            tabX += tw + 3;
         }
 
         String activeType = availableTypes.get(currentTab);
@@ -368,7 +398,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         }
 
         int startIdx = currentPage * RECIPES_PER_PAGE;
-        int cardY = y0 + 48;
+        int cardY = y0 + 48 + (rows - 1) * TAB_ROW_STEP;
         for (int i = startIdx; i < Math.min(activeList.size(), startIdx + RECIPES_PER_PAGE); i++) {
             RecipeEntry rec = activeList.get(i);
             renderRecipeCard(g, rec, x0 + 8, cardY, boxW - 16, 62, mouseX, mouseY);
