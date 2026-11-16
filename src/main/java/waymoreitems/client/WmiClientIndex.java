@@ -200,6 +200,7 @@ public final class WmiClientIndex {
         List<RecipeEntry> entries = new ArrayList<>();
 
         RecipeMap map = pendingRecipeMap;
+        WmiDedicatedRecipes.clear();
         // Mesure de couverture par mod : recettes reçues, recettes lues, types de recettes
         java.util.Map<String, int[]> coverage = new java.util.TreeMap<>();
         java.util.Map<String, java.util.Set<String>> typesByMod = new java.util.TreeMap<>();
@@ -212,7 +213,7 @@ public final class WmiClientIndex {
                 int readBefore = c[1];
                 try {
                     RecipeEntry entry = convertHolder(holder, context);
-                    if (entry != null && !entry.outputs().isEmpty()) {
+                    if (entry != null && (!entry.outputs().isEmpty() || WmiDedicatedRecipes.isInfo(entry))) {
                         entries.add(entry);
                         c[1]++;
                         typesByMod.computeIfAbsent(ns, k -> new java.util.TreeSet<>()).add(entry.typeId());
@@ -388,6 +389,11 @@ public final class WmiClientIndex {
     }
 
     private static RecipeEntry convertHolder(RecipeHolder<?> holder, ContextMap context) {
+        // 0. Lecture dédiée (procédés en monde, démontages, recettes calculées à la volée), par les données de la recette
+        RecipeEntry dedicated = WmiDedicatedRecipes.convert(holder);
+        if (dedicated != null) {
+            return dedicated;
+        }
         String recipeId = holder.id().identifier().toString();
         Recipe<?> recipe = holder.value();
         RecipeType<?> type = recipe.getType();

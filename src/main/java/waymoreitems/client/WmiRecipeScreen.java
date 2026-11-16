@@ -416,7 +416,9 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
                 String chosen = ing.alternatives().get((int) (tick % ing.alternatives().size()));
                 drawFloatingSlot(g, ix + (i % 3) * 19, iy + (i / 3) * 19, chosen, ing.count(), false, mouseX, mouseY);
             }
-            drawAnimatedArrow(g, cx + 70, cy + 22, 24);
+            if (!rec.outputs().isEmpty()) {
+                drawAnimatedArrow(g, cx + 70, cy + 22, 24);
+            }
             for (int i = 0; i < rec.outputs().size(); i++) {
                 RecipeEntry.ItemAmount out = rec.outputs().get(i);
                 drawFloatingSlot(g, cx + 104 + i * 22, cy + 20, out.itemId(), out.count(), true, mouseX, mouseY);
@@ -437,6 +439,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         if (rec.totalEnergy() > 0) {
             WmiDraw.drawText(g, font, rec.totalEnergy() + " EU", metaX, metaY, th.textMuted);
         }
+        drawRecipeNotes(g, rec, cx, cy, cw, metaX, metaY + (rec.totalEnergy() > 0 ? 10 : 0));
 
         // Bouton « + » : arbre de fabrication de la recette ajouté aux Notes (vert si tout est déjà en inventaire)
         boolean canExec = WmiClientIndex.get().canExecuteSingleRecipe(rec, playerInventory);
@@ -471,6 +474,47 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             String msg = pinnedFeedbackText;
             int mw = WmiVector.width(font, msg);
             WmiDraw.drawText(g, font, msg, leftOfPlus - mw, btnY + 3, th.green);
+        }
+    }
+
+    /**
+     * Lignes de texte des recettes lues par {@link WmiDedicatedRecipes} (procédé, fiche d'information), coupées à la
+     * largeur libre de la carte : à droite des produits, ou dès la flèche quand la recette n'en a pas.
+     */
+    private void drawRecipeNotes(GuiGraphicsExtractor g, RecipeEntry rec, int cx, int cy, int cw, int metaX, int metaY) {
+        List<String> notes = WmiDedicatedRecipes.notes(rec.id());
+        if (notes.isEmpty()) {
+            return;
+        }
+        int x = rec.outputs().isEmpty() ? cx + 70 : Math.max(metaX, cx + 104 + rec.outputs().size() * 22 + 6);
+        int maxW = cx + cw - 22 - x;
+        int y = metaY;
+        int bottom = cy + 62 - 10;
+        if (maxW < 30) {
+            return;
+        }
+        WmiTheme th = theme();
+        for (String note : notes) {
+            StringBuilder line = new StringBuilder();
+            for (String word : note.split(" ")) {
+                String candidate = line.isEmpty() ? word : line + " " + word;
+                if (!line.isEmpty() && WmiVector.width(font, candidate) > maxW) {
+                    if (y > bottom) {
+                        return;
+                    }
+                    WmiDraw.drawText(g, font, line.toString(), x, y, th.textMuted);
+                    y += 10;
+                    line.setLength(0);
+                    line.append(word);
+                } else {
+                    line.setLength(0);
+                    line.append(candidate);
+                }
+            }
+            if (!line.isEmpty() && y <= bottom) {
+                WmiDraw.drawText(g, font, line.toString(), x, y, th.textMuted);
+                y += 10;
+            }
         }
     }
 
