@@ -830,6 +830,36 @@ public final class WmiTests {
         check("mesures : remise a zero", t.count() == 0 && t.maxMillis() == 0 && t.summary().startsWith("n=0 "));
     }
 
+    /** Couverture : agrégation par mod et par type, classement, cas limites (jeu de contrôle inspiré du relevé AE2). */
+    private static void testCoverageReport() {
+        java.util.List<CoverageReport.Sample> samples = new java.util.ArrayList<>();
+        for (int i = 0; i < 408; i++) {
+            samples.add(new CoverageReport.Sample("ae2:r" + i, "minecraft:crafting_shaped", true));
+        }
+        for (int i = 0; i < 60; i++) {
+            samples.add(new CoverageReport.Sample("ae2:special" + i, "ae2:inscriber", false));
+        }
+        for (int i = 0; i < 24; i++) {
+            samples.add(new CoverageReport.Sample("ae2:x" + i, "minecraft:crafting_special_x", false));
+        }
+        samples.add(new CoverageReport.Sample("minecraft:stick", "minecraft:crafting_shaped", true));
+        samples.add(new CoverageReport.Sample("sansespace", null, false));
+        CoverageReport r = CoverageReport.of(samples);
+        check("couverture : totaux (409 lues sur 494)", r.read() == 409 && r.received() == 494 && r.unread() == 85);
+        check("couverture : trois mods (ae2, minecraft, ?)", r.mods().size() == 3);
+        CoverageReport.ModCoverage ae2 = r.mods().get(0);
+        check("couverture : le mod le moins bien lu vient en tete (ae2 408 sur 492)",
+                ae2.mod().equals("ae2") && ae2.read() == 408 && ae2.received() == 492 && ae2.unread() == 84);
+        check("couverture : types classes par recettes non lues decroissantes",
+                ae2.types().get(0).typeId().equals("ae2:inscriber") && ae2.types().get(0).unread() == 60
+                        && ae2.types().get(1).unread() == 24 && ae2.types().get(2).unread() == 0);
+        check("couverture : identifiant sans espace de noms range sous ? avec le type ?",
+                r.mods().stream().anyMatch(m -> m.mod().equals("?") && m.types().get(0).typeId().equals("?")));
+        check("couverture : pourcentage (ae2 = 82,9 %)", CoverageReport.formatPercent(ae2.percent()).equals("82.9"));
+        check("couverture : liste vide = 100 % et aucun mod",
+                CoverageReport.of(java.util.List.of()).mods().isEmpty() && CoverageReport.of(java.util.List.of()).percent() == 100.0);
+    }
+
     public static void main(String[] args) {
         RecipeIndex index = new RecipeIndex(sampleItems(), sampleRecipes());
         testSearchAndFilters(index);
@@ -847,6 +877,7 @@ public final class WmiTests {
         testPinRecipeInputs();
         testThemePalette();
         testTimingStats();
+        testCoverageReport();
         GuiLayoutTests.run(WmiTests::check);
         LangTests.run(WmiTests::check);
 

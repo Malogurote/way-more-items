@@ -384,5 +384,15 @@
   "wmi.enchantments.title": "Verzauberungen",
   "wmi.enchantments.count": "%s Verzauberungen",
   "wmi.enchantments.search": "Verzauberung suchen",
-  "wmi.enchantments.received": "Buch ins Inventar gelegt: %s"
+  "wmi.enchantments.received": "Buch ins Inventar gelegt: %s",
+  "wmi.coverage.none": "Noch keine Rezepte empfangen: Betritt zuerst eine Welt.",
+  "wmi.coverage.summary": "Abdeckung: %1$s von %2$s Spielrezepten gelesen (%3$s), %4$s Mods.",
+  "wmi.coverage.chat_mod": "%1$s: %2$s von %3$s gelesen (%4$s)",
+  "wmi.coverage.all_read": "Alle Rezepte wurden gelesen.",
+  "wmi.coverage.saved": "Vollständiger Bericht: %s",
+  "wmi.coverage.failed": "Bericht nicht geschrieben: %s",
+  "wmi.coverage.file.title": "Rezeptabdeckung von WMI",
+  "wmi.coverage.file.total": "Gesamt: %1$s von %2$s Rezepten gelesen (%3$s), %4$s nicht gelesen.",
+  "wmi.coverage.file.mod": "%1$s: %2$s von %3$s gelesen (%4$s), %5$s nicht gelesen",
+  "wmi.coverage.file.type": "  %1$s: %2$s von %3$s gelesen, %4$s nicht gelesen"
 }

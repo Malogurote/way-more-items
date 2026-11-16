@@ -384,5 +384,15 @@
   "wmi.enchantments.title": "Enchantments",
   "wmi.enchantments.count": "%s enchantments",
   "wmi.enchantments.search": "Search for an enchantment",
-  "wmi.enchantments.received": "Book added to your inventory: %s"
+  "wmi.enchantments.received": "Book added to your inventory: %s",
+  "wmi.coverage.none": "No recipes received yet: join a world first.",
+  "wmi.coverage.summary": "Coverage: %1$s of %2$s game recipes read (%3$s), %4$s mods.",
+  "wmi.coverage.chat_mod": "%1$s: %2$s of %3$s read (%4$s)",
+  "wmi.coverage.all_read": "Every recipe was read.",
+  "wmi.coverage.saved": "Full report: %s",
+  "wmi.coverage.failed": "Report not written: %s",
+  "wmi.coverage.file.title": "WMI recipe coverage",
+  "wmi.coverage.file.total": "Total: %1$s of %2$s recipes read (%3$s), %4$s not read.",
+  "wmi.coverage.file.mod": "%1$s: %2$s of %3$s read (%4$s), %5$s not read",
+  "wmi.coverage.file.type": "  %1$s: %2$s of %3$s read, %4$s not read"
 }

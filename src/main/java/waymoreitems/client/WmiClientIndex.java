@@ -36,6 +36,7 @@ import net.minecraft.world.level.block.EntityBlock;
 import waymoreitems.api.RecipeLayoutSpec;
 import waymoreitems.api.WmiRegistry;
 import waymoreitems.core.CatalogItem;
+import waymoreitems.core.CoverageReport;
 import waymoreitems.core.RecipeEntry;
 import waymoreitems.core.RecipeIndex;
 
@@ -68,6 +69,7 @@ public final class WmiClientIndex {
 
     private static volatile RecipeIndex currentIndex = new RecipeIndex(List.of(), List.of());
     private static volatile List<CreativeTabEntry> currentCreativeTabs = List.of();
+    private static volatile List<CoverageReport.Sample> coverageSamples;
     private static volatile RecipeMap pendingRecipeMap;
     private static volatile boolean needsRebuild = true;
     private static volatile boolean builtWithBoundTags = false;
@@ -120,6 +122,11 @@ public final class WmiClientIndex {
         return currentIndex;
     }
 
+    /** Recettes connues du jeu à la dernière indexation, lues ou non ({@code null} : aucune recette reçue). */
+    public static List<CoverageReport.Sample> coverageSamples() {
+        return coverageSamples;
+    }
+
     /** Recette reçue du serveur portant cet identifiant ({@code espace:chemin}), ou {@code null}. */
     public static net.minecraft.world.item.crafting.@org.jspecify.annotations.Nullable Recipe<?> recipeById(String recipeId) {
         RecipeMap map = pendingRecipeMap;
@@ -146,6 +153,7 @@ public final class WmiClientIndex {
         pendingRecipeMap = null;
         currentIndex = new RecipeIndex(List.of(), List.of());
         currentCreativeTabs = List.of();
+        coverageSamples = null;
         needsRebuild = true;
         builtWithBoundTags = false;
         builtWithLanguage = null;
@@ -255,10 +263,8 @@ public final class WmiClientIndex {
         private final Map<String, ItemStack> stacks = new HashMap<>();
         private final List<RecipeEntry> entries = new ArrayList<>();
         private int recipesRead;
-        // Mesure de couverture par mod : recettes reçues, recettes lues, types de recettes
-        private final Map<String, int[]> coverage = new java.util.TreeMap<>();
-        private final Map<String, Set<String>> typesByMod = new java.util.TreeMap<>();
-        private final Map<String, Map<String, Integer>> unreadTypes = new java.util.TreeMap<>();
+        // Couverture : chaque recette reçue, lue ou non (rapport de /wmi coverage) ; null si aucune recette reçue
+        private final @Nullable List<CoverageReport.Sample> samples;
         private @Nullable CompletableFuture<RecipeIndex> indexing;
 
         /** Temps passé dans chaque phase (objets, recettes, extracteurs, indexation, publication), en nanosecondes. */
@@ -280,6 +286,7 @@ public final class WmiClientIndex {
             this.itemRefs = BuiltInRegistries.ITEM.listElements().toList();
             RecipeMap map = pendingRecipeMap;
             this.holders = map == null ? List.of() : List.copyOf(map.values());
+            this.samples = map == null ? null : new ArrayList<>();
         }
 
         /**
@@ -321,7 +328,6 @@ public final class WmiClientIndex {
                 if (recipePos < holders.size()) {
                     return;
                 }
-                logCoverage();
                 phase = EXTRACTORS;
             }
             if (phase == EXTRACTORS) {
@@ -384,6 +390,7 @@ public final class WmiClientIndex {
             long t = System.nanoTime();
             currentIndex = index;
             stackById = stacks;
+            coverageSamples = samples == null ? null : List.copyOf(samples);
             currentCreativeTabs = buildCreativeTabs(mc);
             phaseNanos[DONE] = System.nanoTime() - t;
         }
@@ -422,39 +429,23 @@ public final class WmiClientIndex {
         }
 
         private void readRecipe(RecipeHolder<?> holder) {
-            String ns = holder.id().identifier().getNamespace();
-            int[] c = coverage.computeIfAbsent(ns, k -> new int[2]);
-            c[0]++;
-            int readBefore = c[1];
+            boolean read = false;
             try {
                 RecipeEntry entry = convertHolder(holder, context);
                 if (entry != null && !entry.outputs().isEmpty()) {
                     entries.add(entry);
-                    c[1]++;
-                    typesByMod.computeIfAbsent(ns, k -> new java.util.TreeSet<>()).add(entry.typeId());
+                    read = true;
                 }
             } catch (Exception ignored) {
             }
-            if (c[1] == readBefore) {
-                String type;
-                try {
-                    type = String.valueOf(BuiltInRegistries.RECIPE_TYPE.getKey(holder.value().getType()));
-                } catch (Exception e) {
-                    type = "?";
-                }
-                unreadTypes.computeIfAbsent(ns, k -> new java.util.TreeMap<>()).merge(type, 1, Integer::sum);
+            String type;
+            try {
+                type = String.valueOf(BuiltInRegistries.RECIPE_TYPE.getKey(holder.value().getType()));
+            } catch (Exception e) {
+                type = "?";
             }
-        }
-
-        private void logCoverage() {
-            if (!unreadTypes.isEmpty()) {
-                com.mojang.logging.LogUtils.getLogger().info("WMI : recettes non lues par mod et par type : " + unreadTypes);
-            }
-            if (!coverage.isEmpty()) {
-                StringBuilder report = new StringBuilder("WMI : recettes lues par mod (lues/reçues, types) :");
-                coverage.forEach((ns, c) -> report.append(' ').append(ns).append(' ').append(c[1]).append('/').append(c[0])
-                        .append(" (").append(typesByMod.getOrDefault(ns, Set.of()).size()).append(") ;"));
-                com.mojang.logging.LogUtils.getLogger().info(report.toString());
+            if (samples != null) {
+                samples.add(new CoverageReport.Sample(holder.id().identifier().toString(), type, read));
             }
         }
 

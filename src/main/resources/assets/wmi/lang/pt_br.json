@@ -384,5 +384,15 @@
   "wmi.enchantments.title": "Encantamentos",
   "wmi.enchantments.count": "%s encantamentos",
   "wmi.enchantments.search": "Buscar um encantamento",
-  "wmi.enchantments.received": "Livro adicionado ao inventário: %s"
+  "wmi.enchantments.received": "Livro adicionado ao inventário: %s",
+  "wmi.coverage.none": "Nenhuma receita recebida ainda: entre primeiro em um mundo.",
+  "wmi.coverage.summary": "Cobertura: %1$s de %2$s receitas do jogo lidas (%3$s), %4$s mods.",
+  "wmi.coverage.chat_mod": "%1$s: %2$s de %3$s lidas (%4$s)",
+  "wmi.coverage.all_read": "Todas as receitas foram lidas.",
+  "wmi.coverage.saved": "Relatório completo: %s",
+  "wmi.coverage.failed": "Relatório não escrito: %s",
+  "wmi.coverage.file.title": "Cobertura de receitas do WMI",
+  "wmi.coverage.file.total": "Total: %1$s de %2$s receitas lidas (%3$s), %4$s não lidas.",
+  "wmi.coverage.file.mod": "%1$s: %2$s de %3$s lidas (%4$s), %5$s não lidas",
+  "wmi.coverage.file.type": "  %1$s: %2$s de %3$s lidas, %4$s não lidas"
 }

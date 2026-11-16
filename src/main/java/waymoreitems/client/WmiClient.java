@@ -110,6 +110,7 @@ public final class WmiClient {
                     ctx.getSource().sendSuccess(() -> WmiText.c("wmi.cmd.capture_armed"), false);
                     return 1;
                 }))
+                .then(Commands.literal("coverage").executes(WmiClient::coverageCommand))
                 .then(Commands.literal("mise_en_page").executes(ctx -> {
                     String msg = WmiLayoutRuntime.reload(true);
                     // Les comptes rendus de réussite ou d'erreur sont déjà affichés par reload
@@ -133,6 +134,13 @@ public final class WmiClient {
                             ctx.getSource().sendSuccess(() -> WmiText.c("wmi.cmd.perf_index"), false);
                             return 1;
                         }))));
+    }
+
+    private static int coverageCommand(com.mojang.brigadier.context.CommandContext<net.minecraft.commands.CommandSourceStack> ctx) {
+        for (net.minecraft.network.chat.Component line : WmiCoverage.run()) {
+            ctx.getSource().sendSuccess(() -> line, false);
+        }
+        return 1;
     }
 
     private static void registerHudLayer(RegisterGuiLayersEvent event) {
