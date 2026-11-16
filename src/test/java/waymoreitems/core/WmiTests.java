@@ -880,6 +880,7 @@ public final class WmiTests {
         testCoverageReport();
         GuiLayoutTests.run(WmiTests::check);
         LangTests.run(WmiTests::check);
+        ImportedLayoutTests.run(WmiTests::check);
 
         System.out.println("WmiTests : " + checks + " verifications, " + failures + " echec(s).");
         if (failures > 0) {

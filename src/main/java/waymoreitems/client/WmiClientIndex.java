@@ -47,6 +47,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -342,6 +343,12 @@ public final class WmiClientIndex {
                     } catch (Exception ignored) {
                     }
                 }
+                // Source externe (navigateur de recettes installé à côté) : seulement les recettes que WMI n'a pas lues
+                Set<String> knownIds = new HashSet<>();
+                for (RecipeEntry e : entries) {
+                    knownIds.add(e.id());
+                }
+                entries.addAll(WmiExternalSources.importRecipes(knownIds).recipes());
                 phaseNanos[EXTRACTORS] += System.nanoTime() - t;
                 phase = INDEXING;
                 if (!async) {

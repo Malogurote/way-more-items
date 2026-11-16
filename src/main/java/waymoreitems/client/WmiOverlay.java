@@ -259,6 +259,14 @@ public final class WmiOverlay {
         Minecraft.getInstance().gui.setScreen(new WmiRecipeScreen(parent, mode, itemId, checklist, snapshotPlayerInventory()));
     }
 
+    /** Usages d'une machine, ouverts sur l'onglet du procédé {@code typeId} (zone cliquable d'un écran de machine). */
+    public void openWorkstation(Screen parent, String stationItemId, String typeId) {
+        WmiRecipeScreen screen = new WmiRecipeScreen(parent, WmiRecipeScreen.ViewMode.USES, stationItemId, checklist,
+                snapshotPlayerInventory());
+        screen.focusType(typeId);
+        Minecraft.getInstance().gui.setScreen(screen);
+    }
+
     public void tickClient() {
         Minecraft mc = Minecraft.getInstance();
         // Noms d'objets en anglais pour tout le jeu (option) : recouvrir la table de traduction après chaque rechargement
@@ -368,15 +376,29 @@ public final class WmiOverlay {
         int guiTop = Math.round(screen.getTopPos() / f);
         int guiW = Math.round(screen.getImageWidth() / f);
         int guiH = Math.round(screen.getImageHeight() / f);
-        lastGuiLeft = guiLeft;
-        lastGuiRight = guiLeft + guiW;
+        // Panneaux accolés à l'inventaire que déclare la machine (source externe) : les éléments ancrés s'en écartent
+        GuiLayout.Rect anchor = new GuiLayout.Rect(guiLeft, guiTop, guiW, guiH);
+        List<Rect2i> extra = WmiExternalSources.screenAreas(screen);
+        if (!extra.isEmpty()) {
+            List<int[]> areas = new ArrayList<>();
+            for (Rect2i r : extra) {
+                int x0 = (int) Math.floor(r.getX() / f);
+                int y0 = (int) Math.floor(r.getY() / f);
+                areas.add(new int[] {x0, y0, (int) Math.ceil((r.getX() + r.getWidth()) / f) - x0,
+                        (int) Math.ceil((r.getY() + r.getHeight()) / f) - y0});
+            }
+            int[] ext = waymoreitems.core.ImportedRecipeLayout.extendWithAdjacent(
+                    new int[] {guiLeft, guiTop, guiW, guiH}, areas, 2);
+            anchor = new GuiLayout.Rect(ext[0], ext[1], ext[2], ext[3]);
+        }
+        lastGuiLeft = anchor.x();
+        lastGuiRight = anchor.right();
         lastScreenW = screenW;
         lastScreenH = screenH;
 
         // Mise en page déclarative (GuiLayout) : calcul d'origine, ou config/wmi-layout.json rechargé à chaud.
         // Chaque élément est placé dans l'ordre GuiLayout.OVERLAY_ORDER, avec sa taille naturelle mesurée ici.
-        GuiLayout.Resolver lay = WmiLayoutRuntime.layout().resolver(screenW, screenH,
-                new GuiLayout.Rect(guiLeft, guiTop, guiW, guiH));
+        GuiLayout.Resolver lay = WmiLayoutRuntime.layout().resolver(screenW, screenH, anchor);
         frame = lay;
 
         // 0. Panneau de droite : largeur réglable à la souris (proportion de l'écran), bornée par la mise en page

@@ -234,6 +234,14 @@ final class WmiOverlayInput {
             return true;
         }
 
+        // 2 ter. Zone cliquable de la machine (flèche de progression), déclarée par une source externe : recettes de WMI
+        if (isLeftClick(btn) && !o.jeiModeActive() && screen.getMenu().getCarried().isEmpty()
+                && WmiExternalSources.clickArea(screen, event.x(), event.y())) {
+            consumeNextRelease = true;
+            playClickSound(mc);
+            return true;
+        }
+
         o.panel.searchFocused = false;
         o.notes.postItInputFocused = false;
 
