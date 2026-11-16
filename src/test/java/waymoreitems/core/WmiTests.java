@@ -879,6 +879,7 @@ public final class WmiTests {
         testTimingStats();
         testCoverageReport();
         GuiLayoutTests.run(WmiTests::check);
+        CraftTreeChoiceTests.run(WmiTests::check);
         LangTests.run(WmiTests::check);
         ImportedLayoutTests.run(WmiTests::check);
         FluidTests.run(WmiTests::check);

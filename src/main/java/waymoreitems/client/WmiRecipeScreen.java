@@ -17,6 +17,7 @@ import waymoreitems.api.RecipeLayoutSpec;
 import waymoreitems.api.WmiRegistry;
 import waymoreitems.core.CatalogItem;
 import waymoreitems.core.CommandPalette;
+import waymoreitems.core.CraftPlanCache;
 import waymoreitems.core.CraftTreeCalculator;
 import waymoreitems.core.PinnedChecklist;
 import waymoreitems.core.RecipeEntry;
@@ -77,6 +78,8 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
     private int amountY;
     private int amountW;
     private CraftTreeCalculator.CraftPlan currentPlan;
+    /** Plans de l'arbre déjà calculés : relus à chaque image, recalculés seulement si l'objet, la quantité, l'inventaire ou un choix de recette change. */
+    private static final CraftPlanCache PLANS = new CraftPlanCache(32);
     private int treeScrollOffset;
 
     /** Confirmation affichée deux secondes à côté du bouton « + » de la recette concernée. */
@@ -94,6 +97,8 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
     /** Quantité de la case survolée (millibuckets pour un fluide), 0 si inconnue. */
     private int hoveredAmount;
     private final List<ClickableZone> clickZones = new ArrayList<>();
+    /** Zones du clic droit (retour au choix automatique d'une recette de l'arbre). */
+    private final List<ClickableZone> rightClickZones = new ArrayList<>();
 
     private record ClickableZone(int x, int y, int w, int h, Runnable action) {
         boolean contains(double mx, double my) {
@@ -178,7 +183,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             return;
         }
         if (mode == ViewMode.CRAFT_TREE) {
-            currentPlan = CraftTreeCalculator.plan(idx, targetItemId, treeMultiplier, playerInventory, Map.of());
+            currentPlan = PLANS.plan(idx, targetItemId, treeMultiplier, treeInventory(), checklist.recipeChoices().asMap());
             return;
         }
 
@@ -220,6 +225,12 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         hoveredItemId = null;
         hoveredAmount = 0;
         clickZones.clear();
+        rightClickZones.clear();
+        if (mode == ViewMode.CRAFT_TREE && !targetItemId.isEmpty()) {
+            // Inventaire relu à chaque image : le plan suit les objets ramassés ou consommés, sans recalcul s'il ne change pas
+            currentPlan = PLANS.plan(WmiClientIndex.peek(), targetItemId, treeMultiplier, treeInventory(),
+                    checklist.recipeChoices().asMap());
+        }
 
         // Saisie de texte du système (SDL3) : sans startTextInput, aucun caractère n'arrive à charTyped.
         // La palette et l'éditeur de Notes sont des champs dessinés à la main ; Gui.setScreen coupe la saisie
@@ -562,8 +573,9 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         }
         String out = rec.outputs().get(0).itemId();
         int count = Math.max(1, rec.outputCount(out));
-        CraftTreeCalculator.CraftPlan plan = CraftTreeCalculator.plan(
-                WmiClientIndex.get(), out, count, playerInventory, Map.of(out, rec.id()));
+        Map<String, String> pref = new LinkedHashMap<>(checklist.recipeChoices().asMap());
+        pref.put(out, rec.id());
+        CraftTreeCalculator.CraftPlan plan = PLANS.plan(WmiClientIndex.get(), out, count, playerInventory, pref);
         checklist.pinPlan(out, count, plan);
         pinnedFeedbackText = WmiText.s("wmi.recipe.tree_added");
     }
@@ -788,8 +800,72 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         drawTreeSlot(g, cx, y + 1, node.itemId(), node.crafted(), th.accent, mouseX, mouseY);
         cx += TREE_SLOT + 5;
 
+        int labelEnd = x + w - 3;
+        List<RecipeEntry> choices = WmiClientIndex.peek().recipesForOutput(node.itemId());
+        if (choices.size() > 1) {
+            labelEnd = drawRecipeChooser(g, node, choices, x + w - 3, y, mouseX, mouseY) - 4;
+        }
         String label = r.categoryName() + (node.batches() > 1 ? " ×" + node.batches() : "");
-        WmiDraw.drawText(g, font, trimToWidth(label, x + w - cx - 3), cx, y + 7, th.textMuted);
+        WmiDraw.drawText(g, font, trimToWidth(label, labelEnd - cx), cx, y + 7, th.textMuted);
+    }
+
+    /**
+     * Flèches et rang de la recette employée ({@code 2/3}) au bout d'une étape : clic sur une flèche = recette
+     * précédente ou suivante pour cet objet dans tous les arbres ; clic droit = retour au choix automatique.
+     *
+     * @return abscisse du bord gauche du sélecteur
+     */
+    private int drawRecipeChooser(GuiGraphicsExtractor g, CraftTreeCalculator.CraftNode node, List<RecipeEntry> choices,
+                                  int right, int y, int mouseX, int mouseY) {
+        WmiTheme th = theme();
+        String itemId = node.itemId();
+        int rank = choices.indexOf(node.recipe()) + 1;
+        String count = (rank > 0 ? rank : "?") + "/" + choices.size();
+        int textW = WmiVector.width(font, count);
+        int arrowW = 9;
+        int totalW = arrowW + 2 + textW + 2 + arrowW;
+        int left = right - totalW;
+        boolean chosen = checklist.recipeChoices().get(itemId) != null;
+        boolean hoverPrev = mouseX >= left && mouseX < left + arrowW && mouseY >= y + 3 && mouseY < y + 19;
+        boolean hoverNext = mouseX >= right - arrowW && mouseX < right && mouseY >= y + 3 && mouseY < y + 19;
+        drawChevron(g, left + 3, y + 8, true, hoverPrev ? th.accent : th.textMain);
+        drawChevron(g, right - arrowW + 3, y + 8, false, hoverNext ? th.accent : th.textMain);
+        WmiDraw.drawText(g, font, count, left + arrowW + 2, y + 7, chosen ? th.accent : th.textMuted);
+        clickZones.add(new ClickableZone(left, y + 3, arrowW, 16, () -> cycleStepRecipe(itemId, -1)));
+        clickZones.add(new ClickableZone(right - arrowW, y + 3, arrowW, 16, () -> cycleStepRecipe(itemId, 1)));
+        rightClickZones.add(new ClickableZone(left, y + 3, totalW, 16, () -> resetStepRecipe(itemId)));
+        return left;
+    }
+
+    /** Chevron plein de 3 pixels de large et 7 de haut, pointé vers la gauche ou la droite. */
+    private static void drawChevron(GuiGraphicsExtractor g, int x, int y, boolean left, int color) {
+        for (int k = 0; k < 4; k++) {
+            int col = left ? x + 3 - k : x + k;
+            g.fill(col, y + k, col + 1, y + 7 - k, color);
+        }
+    }
+
+    /** Recette précédente ou suivante pour {@code itemId}, mémorisée et reprise par les Notes. */
+    private void cycleStepRecipe(String itemId, int delta) {
+        String next = PLANS.cycleRecipe(WmiClientIndex.peek(), targetItemId, treeMultiplier, treeInventory(),
+                checklist.recipeChoices().asMap(), itemId, delta);
+        if (next != null && checklist.chooseRecipe(itemId, next)) {
+            WmiClient.overlay().settings().save();
+            refreshData();
+        }
+    }
+
+    private void resetStepRecipe(String itemId) {
+        if (checklist.chooseRecipe(itemId, null)) {
+            WmiClient.overlay().settings().save();
+            refreshData();
+        }
+    }
+
+    /** Inventaire courant du joueur pour l'arbre (celui de l'ouverture de la fenêtre si le joueur n'est plus là). */
+    private Map<String, Integer> treeInventory() {
+        Map<String, Integer> live = Minecraft.getInstance().player == null ? null : WmiClient.overlay().snapshotPlayerInventory();
+        return live == null ? playerInventory : live;
     }
 
     /** Case de l'arbre : objet, quantité et cadre de couleur (statut). Survol : infobulle et clic vers sa recette. */
@@ -1101,6 +1177,14 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         commitAmount();
         if (WmiOverlayInput.isLeftClick(btn)) {
             for (ClickableZone z : clickZones) {
+                if (z.contains(mx, my)) {
+                    z.action().run();
+                    return true;
+                }
+            }
+        }
+        if (WmiOverlayInput.isRightClick(btn)) {
+            for (ClickableZone z : rightClickZones) {
                 if (z.contains(mx, my)) {
                     z.action().run();
                     return true;
