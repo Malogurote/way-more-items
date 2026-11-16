@@ -11,7 +11,7 @@ import java.util.Set;
  * <p>Chaque élément décrit sa position sur chaque axe par un ancrage (bord de l'écran, de l'inventaire ou d'un autre
  * élément, avec décalage) et sa taille (fixe, proportion, contenu ou remplissage jusqu'à un bord), bornée par un
  * minimum, un maximum et des limites. Les valeurs par défaut ({@link #DEFAULT_JSON}) reproduisent exactement le
- * calcul d'origine de {@code WmiOverlay} ; un fichier {@code wmi-layout.json} ne contient que ce qui change.
+ * calcul d'origine de {@code WmiOverlay}.
  *
  * <h2>Grammaire</h2>
  * <ul>
@@ -29,11 +29,6 @@ import java.util.Set;
  * <li>{@code visibleMin: [w, h]} : en deçà, l'élément est calculé (et peut servir d'ancrage) mais pas dessiné.</li>
  * <li>Sous-éléments : identifiants pointés ({@code rightPanel.search}), placés par le code pendant le dessin de leur
  * panneau, ancrés d'ordinaire sur ses bords ({@code rightPanel.left}).</li>
- * <li>Décorations ({@code decorations}) : éléments ajoutés sans code, calculés et dessinés après tous les autres,
- * dans l'ordre du fichier ; {@code type} = {@code text} ({@code text}, {@code size} normal, big ou huge,
- * {@code textAlign}), {@code separator}, {@code frame} ({@code style} panel, card ou box) ou {@code item}
- * ({@code item} = identifiant d'objet) ; {@code color} = clé de palette ({@code textMain}, {@code accent}…) ou
- * {@code #AARRGGBB} ; {@code in} = élément dont la décoration suit l'affichage (absente s'il n'est pas dessiné).</li>
  * </ul>
  */
 public final class GuiLayout {
@@ -46,9 +41,6 @@ public final class GuiLayout {
             "notes", "notes.icon", "notes.title", "notes.hud", "widget",
             "rightPanel.tabs", "rightPanel.clickMode", "rightPanel.header", "rightPanel.search",
             "rightPanel.separator", "rightPanel.grid", "rightPanel.footer");
-
-    /** Types de décorations dessinées depuis le fichier, sans code : texte, séparateur, cadre, icône d'objet. */
-    public static final Set<String> DECORATION_TYPES = Set.of("text", "separator", "frame", "item");
 
     private static final Set<String> EDGE_NAMES = Set.of("left", "right", "top", "bottom", "width", "height");
 
@@ -200,13 +192,10 @@ public final class GuiLayout {
 
     private final Map<String, Object> constants;
     private final Map<String, Map<String, Object>> elements;
-    private final Map<String, Map<String, Object>> decorations;
 
-    private GuiLayout(Map<String, Object> constants, Map<String, Map<String, Object>> elements,
-                      Map<String, Map<String, Object>> decorations) {
+    private GuiLayout(Map<String, Object> constants, Map<String, Map<String, Object>> elements) {
         this.constants = constants;
         this.elements = elements;
-        this.decorations = decorations;
     }
 
     /** Rectangle en unités d'interface. */
@@ -254,7 +243,6 @@ public final class GuiLayout {
         Map<String, Object> base = (Map<String, Object>) MiniJson.parse(DEFAULT_JSON);
         Map<String, Object> constants = new LinkedHashMap<>(asMap(base.get("constants")));
         Map<String, Map<String, Object>> elements = new LinkedHashMap<>();
-        Map<String, Map<String, Object>> decorations = new LinkedHashMap<>();
         for (Map.Entry<String, Object> e : asMap(base.get("elements")).entrySet()) {
             elements.put(e.getKey(), new LinkedHashMap<>(asMap(e.getValue())));
         }
@@ -267,14 +255,6 @@ public final class GuiLayout {
             if (c instanceof Map<?, ?>) {
                 constants.putAll(asMap(c));
             }
-            Object decs = overrides.get("decorations");
-            if (decs instanceof Map<?, ?>) {
-                for (Map.Entry<String, Object> e : asMap(decs).entrySet()) {
-                    if (e.getValue() instanceof Map<?, ?> && !elements.containsKey(e.getKey())) {
-                        decorations.put(e.getKey(), new LinkedHashMap<>(asMap(e.getValue())));
-                    }
-                }
-            }
             Object els = overrides.get("elements");
             if (els instanceof Map<?, ?>) {
                 for (Map.Entry<String, Object> e : asMap(els).entrySet()) {
@@ -285,7 +265,7 @@ public final class GuiLayout {
                 }
             }
         }
-        return new GuiLayout(constants, elements, decorations);
+        return new GuiLayout(constants, elements);
     }
 
     @SuppressWarnings("unchecked")
@@ -293,29 +273,9 @@ public final class GuiLayout {
         return o instanceof Map<?, ?> ? (Map<String, Object>) o : Map.of();
     }
 
-    /** Document complet (constantes et éléments), au format {@code wmi_gui_layout}. */
-    public Map<String, Object> toDocument() {
-        Map<String, Object> doc = new LinkedHashMap<>();
-        doc.put("format", FORMAT);
-        doc.put("version", (double) VERSION);
-        doc.put("screen", "overlay");
-        doc.put("constants", new LinkedHashMap<>(constants));
-        doc.put("elements", new LinkedHashMap<>(elements));
-        if (!decorations.isEmpty()) {
-            doc.put("decorations", new LinkedHashMap<>(decorations));
-        }
-        return doc;
-    }
-
-    /** Élément ou décoration portant cet identifiant, ou {@code null}. */
+    /** Élément portant cet identifiant, ou {@code null}. */
     public Map<String, Object> element(String id) {
-        Map<String, Object> el = elements.get(id);
-        return el != null ? el : decorations.get(id);
-    }
-
-    /** Décorations, dans l'ordre du fichier. */
-    public Map<String, Map<String, Object>> decorations() {
-        return decorations;
+        return elements.get(id);
     }
 
     /**
@@ -329,25 +289,6 @@ public final class GuiLayout {
             Map<String, Object> el = elements.get(id);
             if (el == null) {
                 continue;
-            }
-            for (String key : List.of("x", "y", "w", "h")) {
-                checkRefs(id + "." + key, el.get(key), before, problems);
-            }
-            before.add(id);
-        }
-        // Les décorations sont calculées après tous les éléments : elles peuvent citer n'importe lequel
-        before.clear();
-        before.addAll(elements.keySet());
-        for (Map.Entry<String, Map<String, Object>> d : decorations.entrySet()) {
-            String id = d.getKey();
-            Map<String, Object> el = d.getValue();
-            Object type = el.get("type");
-            if (!(type instanceof String t) || !DECORATION_TYPES.contains(t)) {
-                problems.add("unknown_decoration|" + id + "|" + type);
-            }
-            Object in = el.get("in");
-            if (in != null && !elements.containsKey(String.valueOf(in))) {
-                problems.add("unknown_in|" + id + "|" + in);
             }
             for (String key : List.of("x", "y", "w", "h")) {
                 checkRefs(id + "." + key, el.get(key), before, problems);
@@ -401,8 +342,6 @@ public final class GuiLayout {
         private final Rect inventory;
         private final Map<String, Object> localConstants = new LinkedHashMap<>();
         private final Map<String, Rect> rects = new LinkedHashMap<>();
-        private final Map<String, int[]> contents = new LinkedHashMap<>();
-        private final Map<String, Rect> measuredOnly = new LinkedHashMap<>();
 
         private Resolver(int screenW, int screenH, Rect inventory) {
             this.screenW = screenW;
@@ -422,7 +361,6 @@ public final class GuiLayout {
          */
         public Rect place(String id, int contentW, int contentH) {
             Map<String, Object> el = element(id);
-            contents.put(id, new int[] {contentW, contentH});
             if (el == null) {
                 return null;
             }
@@ -449,11 +387,6 @@ public final class GuiLayout {
             rects.put(id, r);
         }
 
-        /** Enregistre un sous-rectangle mesuré (relevé seulement, sans effet sur le calcul). */
-        public void record(String id, int x, int y, int w, int h) {
-            measuredOnly.put(id, new Rect(x, y, w, h));
-        }
-
         public Rect get(String id) {
             return rects.get(id);
         }
@@ -474,14 +407,6 @@ public final class GuiLayout {
 
         public Map<String, Rect> rects() {
             return rects;
-        }
-
-        public Map<String, Rect> measuredOnly() {
-            return measuredOnly;
-        }
-
-        public Map<String, int[]> contents() {
-            return contents;
         }
 
         public int constantInt(String name) {

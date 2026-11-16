@@ -11,7 +11,7 @@ Ce qu'il propose :
 - des notes et des objectifs, pour l'inventaire en cours ou pour toute la partie ;
 - le tri de l'inventaire et des cases verrouillées ;
 - des raccourcis de type créatif : heure, météo, soin et nourriture, nettoyage des objets au sol, horloge en jeu (ce qui passe par le serveur est masqué si le serveur n'a pas WMI) ;
-- des thèmes de couleurs, une taille d'interface propre et un fichier de mise en page (`config/wmi-layout.json`) rechargé à chaud ;
+- des thèmes de couleurs et une taille d'interface propre ;
 - l'anglais, le français, l'allemand, l'espagnol, l'italien et le portugais du Brésil ;
 - une petite API publique (`waymoreitems.api`, jar `wmi-api` à part) pour que d'autres mods ajoutent leurs recettes, mises en page et fiches.
 

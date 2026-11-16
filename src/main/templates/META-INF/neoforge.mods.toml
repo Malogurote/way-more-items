@@ -1,6 +1,7 @@
 modLoader="javafml"
 loaderVersion="[1,)"
 license="${mod_license}"
+issueTrackerURL="https://github.com/Malogurote/way-more-items/issues"
 
 [[accessTransformers]]
 file="META-INF/accesstransformer.cfg"
@@ -9,8 +10,11 @@ file="META-INF/accesstransformer.cfg"
 modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
+authors="Malogurote"
+credits="Roboto font by the Roboto Project Authors (SIL Open Font License 1.1). JEI compatibility through the JEI API by mezz (MIT License)."
+displayURL="https://github.com/Malogurote/way-more-items"
 description='''
-Way More Items (WMI) : navigateur de recettes universel, arbre de fabrication, post-it d'atelier, palette de commande, roue d'actions et tri d'inventaire.
+Way More Items (WMI): a recipe browser that works with any mod, with a crafting tree, workshop notes, a command palette, an action wheel and inventory sorting.
 '''
 
 [[dependencies.${mod_id}]]

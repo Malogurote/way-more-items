@@ -102,26 +102,12 @@ public final class WmiClient {
     }
 
     /**
-     * Commandes client du concepteur d'interfaces : {@code /wmi releve} (relevé de la prochaine image d'un écran à
-     * inventaire) et {@code /wmi mise_en_page} (relecture immédiate de {@code config/wmi-layout.json}) ; mesures de
-     * performance : {@code /wmi perf} (bascule) et {@code /wmi perf index} (reconstruction de l'index chronométrée).
+     * Commandes client : {@code /wmi coverage} (couverture des recettes) ; mesures de performance : {@code /wmi perf}
+     * (bascule) et {@code /wmi perf index} (reconstruction de l'index chronométrée).
      */
     private static void registerClientCommands(RegisterClientCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("wmi")
-                .then(Commands.literal("releve").executes(ctx -> {
-                    WmiLayoutRuntime.armCapture();
-                    ctx.getSource().sendSuccess(() -> WmiText.c("wmi.cmd.capture_armed"), false);
-                    return 1;
-                }))
                 .then(Commands.literal("coverage").executes(WmiClient::coverageCommand))
-                .then(Commands.literal("mise_en_page").executes(ctx -> {
-                    String msg = WmiLayoutRuntime.reload(true);
-                    // Les comptes rendus de réussite ou d'erreur sont déjà affichés par reload
-                    if (msg.equals(WmiLayoutRuntime.noLayoutFileMessage())) {
-                        ctx.getSource().sendSuccess(() -> WmiText.c("wmi.cmd.prefix", msg), false);
-                    }
-                    return 1;
-                }))
                 // Mesures de performance (développement) : bascule, puis reconstruction de l'index chronométrée
                 .then(Commands.literal("perf").executes(ctx -> {
                     boolean on = !WmiPerf.enabled();
@@ -185,7 +171,6 @@ public final class WmiClient {
     private static void onClientTick(ClientTickEvent.Post event) {
         WmiClientIndex.tickClient();
         OVERLAY.tickClient();
-        WmiLayoutRuntime.tick();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.gui.screen() != null) {
             return;

@@ -25,7 +25,7 @@ public final class MiniJson {
 
     /**
      * Analyse un texte JSON ; lève {@link IllegalArgumentException} s'il est invalide. Le message est neutre,
-     * de la forme {@code json|ligne|colonne|clé|argument} : le client le traduit (clés {@code wmi.layout.err.json.*}).
+     * de la forme {@code json|ligne|colonne|clé|argument}.
      */
     public static Object parse(String text) {
         MiniJson p = new MiniJson(text);

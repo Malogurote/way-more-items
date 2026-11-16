@@ -11,7 +11,7 @@ What it does:
 - notes and goals, for the current inventory or for the whole game;
 - inventory sorting and locked slots;
 - creative-style shortcuts: time, weather, heal and feed, clearing dropped items, an in-game clock (anything that needs the server is hidden when the server doesn't run WMI);
-- colour themes, an interface size of its own, and a layout file (`config/wmi-layout.json`) reloaded live;
+- colour themes and an interface size of its own;
 - English, French, German, Spanish, Italian and Brazilian Portuguese;
 - a small public API (`waymoreitems.api`, separate `wmi-api` jar) so other mods can add their recipes, layouts and info pages.
 

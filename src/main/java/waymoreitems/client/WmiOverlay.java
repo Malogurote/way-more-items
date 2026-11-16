@@ -31,7 +31,6 @@ import org.jspecify.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,7 +43,6 @@ import java.util.Map;
  *   <li>{@link WmiNotesPanel} : Notes de l'inventaire et de l'écran de jeu ;</li>
  *   <li>{@link WmiTimeWidget} : widget de l'heure, widget du coin, horloge compacte ;</li>
  *   <li>{@link WmiInventoryTools} : tri, cases verrouillées, surbrillance ;</li>
- *   <li>{@link WmiDecorations} : décorations du fichier de mise en page et relevé ;</li>
  *   <li>{@link WmiOverlayInput} : souris, clavier, saisie de texte ;</li>
  *   <li>{@link WmiDraw} et {@link WmiButtons} : primitives de dessin et boutons de l'image en cours.</li>
  * </ul>
@@ -63,7 +61,9 @@ public final class WmiOverlay {
     final WmiToolbar toolbar;
     final WmiRightPanel panel;
     final WmiInventoryTools inventory;
-    final WmiDecorations decorations;
+    /** Mise en page de la surcouche, intégrée au mod. */
+    private static final GuiLayout LAYOUT = GuiLayout.defaults();
+
     final WmiOverlayInput input;
 
     boolean visible = true;
@@ -90,7 +90,6 @@ public final class WmiOverlay {
         toolbar = new WmiToolbar(this);
         panel = new WmiRightPanel(this);
         inventory = new WmiInventoryTools(this);
-        decorations = new WmiDecorations(this);
         input = new WmiOverlayInput(this);
         settings.load();
     }
@@ -447,9 +446,9 @@ public final class WmiOverlay {
         lastScreenW = screenW;
         lastScreenH = screenH;
 
-        // Mise en page déclarative (GuiLayout) : calcul d'origine, ou config/wmi-layout.json rechargé à chaud.
+        // Mise en page déclarative (GuiLayout).
         // Chaque élément est placé dans l'ordre GuiLayout.OVERLAY_ORDER, avec sa taille naturelle mesurée ici.
-        GuiLayout.Resolver lay = WmiLayoutRuntime.layout().resolver(screenW, screenH, anchor);
+        GuiLayout.Resolver lay = LAYOUT.resolver(screenW, screenH, anchor);
         frame = lay;
 
         // 0. Panneau de droite : largeur réglable à la souris (proportion de l'écran), bornée par la mise en page
@@ -492,13 +491,6 @@ public final class WmiOverlay {
             rightDrawn = true;
         }
 
-        // 7. Décorations ajoutées dans le fichier de mise en page (texte, séparateur, cadre, objet), sans code
-        Map<String, Boolean> drawnNow = new LinkedHashMap<>();
-        for (String id : lay.rects().keySet()) {
-            drawnNow.put(id, !"rightPanel".equals(id) || rightDrawn);
-        }
-        decorations.renderDecorations(g, font, lay, drawnNow);
-
         // 7 bis. Menu du clic droit sur un objet du catalogue, au-dessus de tout (sans infobulle d'objet dessous)
         if (panel.ctxMenuItemId != null) {
             if (panel.ctxMenuScreen == screen) {
@@ -529,15 +521,6 @@ public final class WmiOverlay {
             }
         }
 
-        // 9. Relevé pour le concepteur d'interfaces (/wmi releve)
-        if (WmiLayoutRuntime.captureArmed()) {
-            Map<String, Boolean> drawn = new LinkedHashMap<>();
-            for (String id : lay.rects().keySet()) {
-                boolean partOfRight = "rightPanel".equals(id) || id.startsWith("rightPanel.");
-                drawn.put(id, !partOfRight || rightDrawn);
-            }
-            WmiLayoutRuntime.captureIfArmed(screen, lay, screenW, screenH, decorations.captureContext(mc), drawn);
-        }
         return tooltipSet;
     }
 

@@ -594,9 +594,6 @@ final class WmiRightPanel {
         }
 
         int gridLeft = grid != null ? grid.x() + (gridW - cols * slotStep) / 2 : 0;
-        if (grid != null) {
-            o.frame.record("rightPanel.gridCells", gridLeft, gridTop, cols * slotStep, rows * slotStep);
-        }
         int offset = currentPage * perPage;
         for (int i = 0; grid != null && i < Math.min(perPage, items.size() - offset); i++) {
             CatalogItem item = items.get(offset + i);

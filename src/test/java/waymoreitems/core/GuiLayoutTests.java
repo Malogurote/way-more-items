@@ -141,12 +141,6 @@ final class GuiLayoutTests {
         GuiLayout orphan = GuiLayout.fromJson("{\"elements\":{\"viewerToggle\":{\"x\":{\"to\":\"toolbarVertical.right\"}}}}");
         check.accept("mise en page : renvoi en avant signalé par la validation", !orphan.validate().isEmpty());
 
-        // Aller-retour JSON : le document complet relu donne le même calcul
-        String full = MiniJson.write(layout.toDocument());
-        GuiLayout again = GuiLayout.fromJson(full);
-        Map<String, GuiLayout.Rect> a = declarative(layout, 854, 480, new GuiLayout.Rect(339, 157, 176, 166), 0.275, Bar.VERTICAL, 82, 74, 80, 200, 300, 40, 130, 81);
-        Map<String, GuiLayout.Rect> b = declarative(again, 854, 480, new GuiLayout.Rect(339, 157, 176, 166), 0.275, Bar.VERTICAL, 82, 74, 80, 200, 300, 40, 130, 81);
-        check.accept("mise en page : aller-retour JSON sans perte", a.equals(b));
 
         // Sous-éléments : maquette, en règles relatives aux bords du panneau de droite
         boolean childrenOk = true;
@@ -218,20 +212,6 @@ final class GuiLayoutTests {
                     && r.get("notes.add") == null && r.get("notes.collapse") == null;
         }
         check.accept("mise en page : en-tête des Notes (icône, titre, HUD au bord de l'inventaire)", notesOk);
-
-        // Décorations : lues, validées, placées sur un élément
-        GuiLayout deco = GuiLayout.fromJson("{\"decorations\":{\"titre\":{\"type\":\"text\",\"text\":\"Atelier\",\"in\":\"rightPanel\","
-                + "\"x\":{\"to\":\"rightPanel.left\",\"offset\":6},\"y\":{\"to\":\"rightPanel.bottom\",\"offset\":-30},"
-                + "\"w\":{\"content\":true},\"h\":{\"content\":true}}}}");
-        GuiLayout.Resolver rd = deco.resolver(640, 360, inv);
-        GuiLayout.Rect rpd = rd.place("rightPanel", 0, 0);
-        GuiLayout.Rect t = rd.place("titre", 40, 9);
-        check.accept("mise en page : décoration lue, valide et ancrée sur son panneau",
-                deco.validate().isEmpty() && deco.decorations().size() == 1 && t != null
-                        && t.x() == rpd.x() + 6 && t.y() == rpd.bottom() - 30 && t.w() == 40
-                        && MiniJson.write(deco.toDocument()).contains("\"decorations\""));
-        GuiLayout badDeco = GuiLayout.fromJson("{\"decorations\":{\"z\":{\"type\":\"video\",\"in\":\"inconnu\"}}}");
-        check.accept("mise en page : décoration invalide signalée", badDeco.validate().size() == 2);
 
         boolean rejected = false;
         try {
