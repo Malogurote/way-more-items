@@ -122,9 +122,40 @@ final class WmiNotesPanel {
         }
         int top = cornerH > 0 ? WmiTimeWidget.HUD_CORNER_Y + cornerH + 4 : WmiTimeWidget.HUD_CORNER_Y;
         notesHudFullWidth = true;
-        int notesH = renderPostItBox(g, font, WmiTimeWidget.HUD_CORNER_X, top, WmiTimeWidget.HUD_CORNER_W, -1, -1, false);
-        notesHudFullWidth = false;
+        panelAlpha = settings.hudOpacity / 100.0;
+        int notesH;
+        try {
+            notesH = renderPostItBox(g, font, o.widget.hudCornerX(g, WmiTimeWidget.HUD_CORNER_W), top,
+                    WmiTimeWidget.HUD_CORNER_W, -1, -1, false);
+        } finally {
+            notesHudFullWidth = false;
+            panelAlpha = 1.0;
+        }
         return top - WmiTimeWidget.HUD_CORNER_Y + notesH;
+    }
+
+    /** Opacité du fond des Notes : celle du HUD pendant leur dessin en jeu, pleine dans l'inventaire. */
+    private double panelAlpha = 1.0;
+
+    /**
+     * Lignes d'objectifs à dessiner : toutes dans l'inventaire ; en jeu, sans les lignes atteintes si elles sont
+     * masquées.
+     */
+    private List<PinnedChecklist.Line> visibleLines(boolean inScreen) {
+        List<PinnedChecklist.Line> all = checklist.lines(settings.notesTreeDepth);
+        if (inScreen) {
+            return all;
+        }
+        List<PinnedChecklist.Line> out = all;
+        if (settings.doneBehavior == WmiSettings.DoneBehavior.HIDE) {
+            out = new ArrayList<>(all.size());
+            for (PinnedChecklist.Line l : all) {
+                if (!l.completed()) {
+                    out.add(l);
+                }
+            }
+        }
+        return out;
     }
 
     /** Hauteur des Notes dans l'inventaire, identique au calcul de {@link #renderPostItBox} (en-tête seul si repliées ou vides). */
@@ -182,14 +213,14 @@ final class WmiNotesPanel {
             int mouseY,
             boolean inScreen
     ) {
-        List<PinnedChecklist.Line> lines = checklist.lines(settings.notesTreeDepth);
+        List<PinnedChecklist.Line> lines = visibleLines(inScreen);
         List<PinnedChecklist.NoteEntry> notes = checklist.notes();
         int totalCount = checklist.goalCount() + notes.size();
 
         if (!inScreen && totalCount == 0 && !postItInputFocused) {
             String hint = WmiText.s("wmi.notes.hint");
             int pw = notesHudFullWidth ? boxW : WmiVector.width(font, hint) + 23;
-            drawFrostedPanel(g, x, y, pw, 18);
+            drawFrostedPanel(g, x, y, pw, 18, panelAlpha);
             drawSmallItem(g, notesIcon(), x + 4, y + 3, 12);
             drawText(g, font, hint, x + 17, y + 5, theme().textMain);
             return 18;
@@ -198,7 +229,7 @@ final class WmiNotesPanel {
         int headerH = 22;
         boolean headerOnly = postItCollapsed || (inScreen && totalCount == 0 && !postItInputFocused);
         int boxH = headerOnly ? headerH : headerH + notesBodyHeight(lines, inScreen);
-        drawFrostedPanel(g, x, y, boxW, boxH);
+        drawFrostedPanel(g, x, y, boxW, boxH, panelAlpha);
         renderNotesHeader(g, font, x, y, totalCount, mouseX, mouseY, inScreen);
         if (inScreen) {
             // « + » : ajouter un objet (seul ou avec son arbre de fabrication)
@@ -244,6 +275,9 @@ final class WmiNotesPanel {
             // Même cran (75 %) que les lignes d'objectifs
             String line = hudTrim(font, note.text(), 0, 0, boxW - 32);
             hudText(g, font, line, 0, 0, 0.75, x + 16, ry + 8, textCol);
+            if (note.done() && settings.doneBehavior == WmiSettings.DoneBehavior.STRIKE) {
+                bar(g, x + 16, ry + 5, x + 16 + hudWidth(font, line, 0, 0), ry + 6, theme().green);
+            }
             if (inScreen) {
                 o.buttons.drawn.add(new QuickButton(x + 3, ry, boxW - 18, 10, "", WmiText.s("wmi.notes.toggle_tip"),
                         () -> {
@@ -353,6 +387,9 @@ final class WmiNotesPanel {
         name = hudTrim(font, name, 0, 0, Math.max(10, right - countW - 4 - nameX));
         hudText(g, font, name, 0, 0, 0.75, nameX, baseline, done ? theme().green : theme().textMain);
         hudText(g, font, count, 0, 0, 0.75, right - countW, baseline, done ? theme().green : theme().textMuted);
+        if (done && settings.doneBehavior == WmiSettings.DoneBehavior.STRIKE) {
+            bar(g, nameX, baseline - 3, nameX + hudWidth(font, name, 0, 0), baseline - 2, theme().green);
+        }
         if (!inScreen) {
             return;
         }

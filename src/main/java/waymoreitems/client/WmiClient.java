@@ -26,6 +26,8 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
+import net.minecraft.ChatFormatting;
 import org.joml.Matrix3x2fStack;
 import waymoreitems.WmiMod;
 import waymoreitems.WmiPayloads;
@@ -73,6 +75,7 @@ public final class WmiClient {
         NeoForge.EVENT_BUS.addListener(WmiClient::onClientTick);
         NeoForge.EVENT_BUS.addListener(WmiClient::registerClientCommands);
         NeoForge.EVENT_BUS.addListener(WmiClient::onRenderLevelAfter);
+        NeoForge.EVENT_BUS.addListener(WmiClient::onItemTooltip);
         NeoForge.EVENT_BUS.addListener(WmiClient::onScreenRenderPost);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, WmiClient::onGuiLayerPre);
         NeoForge.EVENT_BUS.addListener(WmiClient::onGuiLayerPost);
@@ -120,9 +123,18 @@ public final class WmiClient {
         event.registerAboveAll(HUD_LAYER_ID, WmiClient::renderHud);
     }
 
+    /**
+     * HUD de WMI masqué : interface du jeu cachée (F1) ou écran de débogage ouvert (F3), chacun selon son réglage de
+     * l'onglet HUD de « Paramètres ».
+     */
+    static boolean hudSuppressed(Minecraft mc) {
+        WmiSettings s = OVERLAY.settings();
+        return (s.hideWithF1 && mc.gui.hud.isHidden()) || (s.hideWithDebug && mc.getDebugOverlay().showDebugScreen());
+    }
+
     private static void renderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null || mc.gui.hud.isHidden() || mc.gui.screen() != null) {
+        if (mc.level == null || mc.player == null || hudSuppressed(mc) || mc.gui.screen() != null) {
             return;
         }
         // Taille propre de WMI, indépendante de celle du jeu (WmiUiScale)
@@ -177,6 +189,30 @@ public final class WmiClient {
         while (KEY_TOGGLE_OVERLAY.consumeClick()) {
             OVERLAY.toggleVisible();
         }
+    }
+
+    /**
+     * Nom du mod d'origine en bas de l'infobulle d'un objet (option de l'onglet Général de « Paramètres ») ; jamais
+     * pendant la lecture des infobulles par l'index (la recherche par infobulle n'en tiendrait pas compte), ni si
+     * une ligne porte déjà ce nom (autre mod qui l'affiche).
+     */
+    private static void onItemTooltip(ItemTooltipEvent event) {
+        if (!OVERLAY.settings().modInTooltip || WmiClientIndex.collectingTooltips || event.getEntity() == null) {
+            return;
+        }
+        ItemStack stack = event.getItemStack();
+        if (stack.isEmpty()) {
+            return;
+        }
+        String ns = BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace();
+        String name = "minecraft".equals(ns) ? "Minecraft" : WmiPlatform.modDisplayName(ns);
+        List<Component> tip = event.getToolTip();
+        for (Component line : tip) {
+            if (line.getString().equals(name)) {
+                return;
+            }
+        }
+        tip.add(Component.literal(name).withStyle(ChatFormatting.BLUE, ChatFormatting.ITALIC));
     }
 
     private static void onRenderLevelAfter(RenderLevelStageEvent.AfterLevel event) {

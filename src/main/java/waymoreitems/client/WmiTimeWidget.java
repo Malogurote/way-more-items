@@ -106,7 +106,7 @@ final class WmiTimeWidget {
      */
     public int hudClockBossShift() {
         Minecraft mc = Minecraft.getInstance();
-        if (!settings.hudClockInGame || mc.level == null || mc.player == null || mc.gui.hud.isHidden() || mc.gui.screen() != null) {
+        if (!settings.hudClockInGame || mc.level == null || mc.player == null || WmiClient.hudSuppressed(mc) || mc.gui.screen() != null) {
             return 0;
         }
         // L'horloge est dessinée à la taille propre de WMI : décalage converti en unités du jeu
@@ -149,7 +149,7 @@ final class WmiTimeWidget {
         int modBase = y + 25;
         int cx = x + w / 2;
         int rx = cx - rowW / 2;
-        hudText(g, font, time, 0, 1, 1.0, rx, row1Base, theme().textMain);
+        hudText(g, font, time, 0, 1, 1.0, rx, row1Base, timeColor(mc));
         bar(g, rx + timeW + gap, y + 3, rx + timeW + gap + 1, row1Base + 2, theme().innerBorder);
         hudText(g, font, day, 0, 1, 1.0, rx + timeW + gap * 2 + 1, row1Base, theme().textMuted);
         hudText(g, font, biome, 0, step, k, cx - hudWidth(font, biome, 0, step) / 2, biomeBase, theme().textMuted);
@@ -266,7 +266,7 @@ final class WmiTimeWidget {
         double u = m.u();
         int textW = m.unitW() - m.padX() * 2;
         String time = env[0];
-        String day = env[2];
+        String day = hudTrim(font, env[2], 1, step, textW);
         String biome = hudTrim(font, env[1], 1, step, textW);
         // Au cran 50 % (widget du coin), le nom du mod est légèrement plus grand (cran 65 %) pour rester lisible
         int modStep = step == HUD_CORNER_STEP ? HUD_CORNER_MOD_STEP : step;
@@ -280,7 +280,7 @@ final class WmiTimeWidget {
         int ox = vector ? x : 0;
         int oy = vector ? y : 0;
         int cx = ox + (vector ? m.w() : m.unitW()) / 2;
-        hudText(g, font, time, 2, step, k, cx - hudWidth(font, time, 2, step) / 2, oy + m.digBase(), theme().textMain);
+        hudText(g, font, time, 2, step, k, cx - hudWidth(font, time, 2, step) / 2, oy + m.digBase(), timeColor(Minecraft.getInstance()));
         hudText(g, font, day, 1, step, k, cx - hudWidth(font, day, 1, step) / 2, oy + m.dayBase(), theme().textMuted);
         int sepHalf = (int) Math.round((vector ? m.w() : m.unitW()) / 2.0 - m.padX());
         bar(g, cx - sepHalf, oy + m.sepY(), cx + sepHalf, oy + m.sepY() + (int) Math.max(1, Math.round(u)), theme().innerBorder);
@@ -310,9 +310,29 @@ final class WmiTimeWidget {
         }
         String[] env = environmentLines(mc);
         WidgetMetrics m = measureWidget(font, env, HUD_CORNER_STEP, HUD_CORNER_W);
-        drawFrostedPanel(g, HUD_CORNER_X, HUD_CORNER_Y, m.w(), m.h());
-        drawWidgetContent(g, font, env, m, HUD_CORNER_X, HUD_CORNER_Y);
+        int x = hudCornerX(g, m.w());
+        drawFrostedPanel(g, x, HUD_CORNER_Y, m.w(), m.h(), settings.hudOpacity / 100.0);
+        drawWidgetContent(g, font, env, m, x, HUD_CORNER_Y);
         return m.h();
+    }
+
+    /** Abscisse d'un bloc du coin de l'écran de jeu (widget ou Notes), à gauche ou à droite selon le réglage. */
+    int hudCornerX(GuiGraphicsExtractor g, int w) {
+        return settings.hudSide == WmiSettings.HudSide.RIGHT ? WmiUiScale.guiWidth(g) - w - HUD_CORNER_X : HUD_CORNER_X;
+    }
+
+    /**
+     * Couleur de l'heure : dorée pendant la minute qui précède l'apparition des monstres (ticks 12000 à 13188 du
+     * jour, coucher du soleil par temps clair), si l'alerte est activée.
+     */
+    int timeColor(Minecraft mc) {
+        if (settings.nightAlert && mc.level != null) {
+            long t = Math.floorMod(mc.level.getDefaultClockTime(), 24000L);
+            if (t >= 12000L && t < 13188L) {
+                return theme().gold;
+            }
+        }
+        return theme().textMain;
     }
 
     private static final int[] SUN_STOPS = {0xFFE27A, 0xF59E3B, 0xB4503C, 0x3B3A6B};
@@ -413,7 +433,7 @@ final class WmiTimeWidget {
         }).orElse("");
     }
 
-    /** Heure du monde (HH:MM), biome traduit et numéro du jour. */
+    /** Heure du monde (HH:MM), biome traduit, numéro du jour et mod du biome. */
     String[] environmentLines(Minecraft mc) {
         long dayTime = mc.level != null ? mc.level.getDefaultClockTime() : 0L;
         long dayCount = dayTime / 24000L + 1L;
@@ -428,9 +448,15 @@ final class WmiTimeWidget {
         };
     }
 
-    /** Heure affichée selon la langue : 24 h (français) ou 12 h avec AM/PM (clé {@code wmi.time.twelve_hour}). */
+    /**
+     * Heure affichée au format réglé dans « Paramètres » : selon la langue (clé {@code wmi.time.twelve_hour}), 24 h
+     * ou 12 h avec AM/PM.
+     */
     static String formatWorldTime(int hours, int minutes) {
-        if (!"true".equals(WmiText.s("wmi.time.twelve_hour"))) {
+        WmiSettings.TimeFormat fmt = WmiClient.overlay().settings().timeFormat;
+        boolean twelve = fmt == WmiSettings.TimeFormat.LANGUAGE ? "true".equals(WmiText.s("wmi.time.twelve_hour"))
+                : fmt == WmiSettings.TimeFormat.H12;
+        if (!twelve) {
             // Les traductions de Minecraft ignorent les drapeaux de largeur (%02d) : zéros complétés ici
             return WmiText.s("wmi.time.format24", String.format("%02d", hours), String.format("%02d", minutes));
         }

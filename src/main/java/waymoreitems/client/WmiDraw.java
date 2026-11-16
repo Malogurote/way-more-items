@@ -75,29 +75,48 @@ public final class WmiDraw {
     // ==================== PRIMITIVES DE RENDU « FLOUTÉ TRANSPARENT ET MAT » & CASES FLOTTANTES ====================
 
     public static void drawFrostedPanel(GuiGraphicsExtractor g, int x, int y, int w, int h) {
+        drawFrostedPanel(g, x, y, w, h, 1.0);
+    }
+
+    /**
+     * Panneau dépoli dont le fond, l'ombre et le contour sont atténués par {@code alpha} (0 à 1, opacité du HUD) ;
+     * le fond suit en plus l'opacité des panneaux réglée dans « Paramètres ». Sous 35 %, le flou est omis.
+     */
+    public static void drawFrostedPanel(GuiGraphicsExtractor g, int x, int y, int w, int h, double alpha) {
         if (theme().vanilla()) {
-            drawVanillaPanel(g, x, y, w, h);
+            if (alpha >= 1.0) {
+                drawVanillaPanel(g, x, y, w, h);
+            } else if (alpha > 0.0) {
+                g.fill(x, y, x + w, y + h, WmiSettings.scaleAlpha(theme().panelBg, alpha * 0.85));
+            }
             return;
         }
+        int bg = WmiSettings.scaleAlpha(WmiClient.overlay().settings().panelBg(), alpha);
+        int border = WmiSettings.scaleAlpha(theme().border, alpha);
+        boolean blur = alpha >= 0.35;
         if (WmiVector.enabled()) {
             // Rendu vectoriel : ombre douce, flou découpé à l'arrondi, voile mat et contour d'un pixel réel.
             float r = PANEL_RADIUS;
-            WmiVector.shadow(g, x, y + 1.5F, w, h, r, 4.0F, 0x38000000);
-            WmiBlurHelper.blitBlurredRegion(g, x, y, w, h, r);
-            WmiVector.fill(g, x, y, w, h, r, theme().panelBg);
-            WmiVector.strokePx(g, x, y, w, h, r, 1.0F, theme().border);
+            WmiVector.shadow(g, x, y + 1.5F, w, h, r, 4.0F, WmiSettings.scaleAlpha(0x38000000, alpha));
+            if (blur) {
+                WmiBlurHelper.blitBlurredRegion(g, x, y, w, h, r);
+            }
+            WmiVector.fill(g, x, y, w, h, r, bg);
+            WmiVector.strokePx(g, x, y, w, h, r, 1.0F, border);
             return;
         }
         // 1. Flou GPU localisé uniquement sous la surface de ce panneau
-        WmiBlurHelper.blitBlurredRegion(g, x, y, w, h);
+        if (blur) {
+            WmiBlurHelper.blitBlurredRegion(g, x, y, w, h);
+        }
         // 2. Ombre portée douce
-        g.fill(x + 2, y + 2, x + w + 2, y + h + 2, 0x26080C14);
+        g.fill(x + 2, y + 2, x + w + 2, y + h + 2, WmiSettings.scaleAlpha(0x26080C14, alpha));
         // 3. Voile mat teinté (Blanc, Crème, Anthracite, Bleu foncé ou Noir)
-        g.fill(x, y, x + w, y + h, theme().panelBg);
+        g.fill(x, y, x + w, y + h, bg);
         // 4. Liseré supérieur mat
-        g.fill(x + 1, y + 1, x + w - 1, y + 2, theme().lightTextShadowOff ? 0x55FFFFFF : 0x18FFFFFF);
+        g.fill(x + 1, y + 1, x + w - 1, y + 2, WmiSettings.scaleAlpha(theme().lightTextShadowOff ? 0x55FFFFFF : 0x18FFFFFF, alpha));
         // 5. Bordure nette
-        drawBorder(g, x, y, w, h, theme().border);
+        drawBorder(g, x, y, w, h, border);
     }
 
     public static void drawFrostedCard(GuiGraphicsExtractor g, int x, int y, int w, int h) {

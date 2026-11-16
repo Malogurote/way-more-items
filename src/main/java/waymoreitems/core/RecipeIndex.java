@@ -3,6 +3,7 @@ package waymoreitems.core;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -117,6 +118,31 @@ public final class RecipeIndex {
 
     public List<CatalogItem> allItems() {
         return items;
+    }
+
+    /**
+     * Nombre d'objets et de recettes par groupe (par exemple un onglet de mod). Un objet appartient au groupe
+     * de son espace de noms ; une recette appartient à chaque groupe qui contient au moins un de ses produits
+     * (une seule fois par groupe). Résultat : groupe, puis {objets, recettes}.
+     */
+    public Map<String, int[]> countsByGroup(java.util.function.UnaryOperator<String> groupOfNamespace) {
+        Map<String, int[]> res = new HashMap<>();
+        for (CatalogItem it : items) {
+            res.computeIfAbsent(groupOfNamespace.apply(it.namespace()), k -> new int[2])[0]++;
+        }
+        for (RecipeEntry r : recipes) {
+            Set<String> groups = new HashSet<>();
+            for (RecipeEntry.ItemAmount out : r.outputs()) {
+                CatalogItem it = itemById.get(out.itemId());
+                if (it != null) {
+                    groups.add(groupOfNamespace.apply(it.namespace()));
+                }
+            }
+            for (String gp : groups) {
+                res.computeIfAbsent(gp, k -> new int[2])[1]++;
+            }
+        }
+        return res;
     }
 
     public CatalogItem item(String id) {

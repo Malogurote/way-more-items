@@ -11,7 +11,10 @@ import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.feature.EndPlatformFeature;
+import net.minecraft.world.level.storage.LevelData;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -67,7 +70,8 @@ import java.util.Set;
  *   <li>{@link DeleteCarriedPayload} : détruit l'objet tenu au curseur, déposé sur le panneau de droite ;</li>
  *   <li>{@link GiveBookPayload} : donne un livre enchanté (catalogue des enchantements ; droits du don) ;</li>
  *   <li>{@link BiomeTeleportPayload} : téléporte au biome demandé le plus proche (droits des actions de monde) ;</li>
- *   <li>{@link BiomeListPayload} (serveur vers client) : biomes possibles de la dimension, réponse à l'action {@code biome_list}.</li>
+ *   <li>{@link DimensionTeleportPayload} : téléporte au point d'apparition d'une dimension (mêmes droits) ;</li>
+ *   <li>{@link BiomeListPayload} (serveur vers client) : biomes possibles de la dimension et dimensions du serveur, réponse à l'action {@code biome_list}.</li>
  * </ul>
  */
 public final class WmiPayloads {
@@ -211,30 +215,53 @@ public final class WmiPayloads {
         }
     }
 
+    /** Fenêtre des biomes, onglet « Dimensions » : téléporte le joueur au point d'apparition de la dimension. */
+    public record DimensionTeleportPayload(String dimensionId) implements CustomPacketPayload {
+        public static final Type<DimensionTeleportPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(WmiMod.MODID, "dimension_teleport"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, DimensionTeleportPayload> STREAM_CODEC = StreamCodec.of(
+                (buf, p) -> buf.writeUtf(p.dimensionId),
+                buf -> new DimensionTeleportPayload(buf.readUtf(256))
+        );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     /**
-     * Serveur vers client : biomes que la dimension du joueur peut générer (réponse à l'action {@code biome_list}).
-     * Le gestionnaire est enregistré côté client ({@code RegisterClientPayloadHandlersEvent}).
+     * Serveur vers client : biomes que la dimension du joueur peut générer et dimensions chargées par le serveur
+     * (réponse à l'action {@code biome_list}). Le gestionnaire est enregistré côté client
+     * ({@code RegisterClientPayloadHandlersEvent}).
      */
-    public record BiomeListPayload(List<String> biomeIds) implements CustomPacketPayload {
+    public record BiomeListPayload(List<String> biomeIds, List<String> dimensionIds) implements CustomPacketPayload {
         public static final int MAX_BIOMES = 2048;
+        public static final int MAX_DIMENSIONS = 256;
         public static final Type<BiomeListPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(WmiMod.MODID, "biome_list"));
         public static final StreamCodec<RegistryFriendlyByteBuf, BiomeListPayload> STREAM_CODEC = StreamCodec.of(
                 (buf, p) -> {
-                    int n = Math.min(MAX_BIOMES, p.biomeIds.size());
-                    buf.writeVarInt(n);
-                    for (int i = 0; i < n; i++) {
-                        buf.writeUtf(p.biomeIds.get(i));
-                    }
+                    writeIds(buf, p.biomeIds, MAX_BIOMES);
+                    writeIds(buf, p.dimensionIds, MAX_DIMENSIONS);
                 },
-                buf -> {
-                    int n = Math.min(MAX_BIOMES, Math.max(0, buf.readVarInt()));
-                    List<String> ids = new ArrayList<>(n);
-                    for (int i = 0; i < n; i++) {
-                        ids.add(buf.readUtf(256));
-                    }
-                    return new BiomeListPayload(ids);
-                }
+                buf -> new BiomeListPayload(readIds(buf, MAX_BIOMES), readIds(buf, MAX_DIMENSIONS))
         );
+
+        private static void writeIds(RegistryFriendlyByteBuf buf, List<String> ids, int max) {
+            int n = Math.min(max, ids.size());
+            buf.writeVarInt(n);
+            for (int i = 0; i < n; i++) {
+                buf.writeUtf(ids.get(i));
+            }
+        }
+
+        private static List<String> readIds(RegistryFriendlyByteBuf buf, int max) {
+            int n = Math.min(max, Math.max(0, buf.readVarInt()));
+            List<String> ids = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                ids.add(buf.readUtf(256));
+            }
+            return ids;
+        }
 
         @Override
         public Type<? extends CustomPacketPayload> type() {
@@ -246,8 +273,8 @@ public final class WmiPayloads {
     }
 
     static void register(RegisterPayloadHandlersEvent event) {
-        // Version 2 : livres enchantés, liste des biomes et téléportation vers un biome
-        PayloadRegistrar reg = event.registrar("2").optional();
+        // Version 3 : livres enchantés, biomes et dimensions (liste, téléportation)
+        PayloadRegistrar reg = event.registrar("3").optional();
         reg.playToServer(ActionPayload.TYPE, ActionPayload.STREAM_CODEC, (payload, ctx) ->
                 ctx.enqueueWork(() -> {
                     if (ctx.player() instanceof ServerPlayer sp) {
@@ -288,6 +315,12 @@ public final class WmiPayloads {
                 ctx.enqueueWork(() -> {
                     if (ctx.player() instanceof ServerPlayer sp) {
                         handleBiomeTeleport(sp, payload.biomeId());
+                    }
+                }));
+        reg.playToServer(DimensionTeleportPayload.TYPE, DimensionTeleportPayload.STREAM_CODEC, (payload, ctx) ->
+                ctx.enqueueWork(() -> {
+                    if (ctx.player() instanceof ServerPlayer sp) {
+                        handleDimensionTeleport(sp, payload.dimensionId());
                     }
                 }));
         reg.playToClient(BiomeListPayload.TYPE, BiomeListPayload.STREAM_CODEC);
@@ -398,7 +431,11 @@ public final class WmiPayloads {
                 for (Holder<Biome> biome : player.level().getChunkSource().getGenerator().getBiomeSource().possibleBiomes()) {
                     biome.unwrapKey().ifPresent(k -> ids.add(k.identifier().toString()));
                 }
-                PacketDistributor.sendToPlayer(player, new BiomeListPayload(ids));
+                List<String> dims = new ArrayList<>();
+                for (ResourceKey<Level> dim : server.levelKeys()) {
+                    dims.add(dim.identifier().toString());
+                }
+                PacketDistributor.sendToPlayer(player, new BiomeListPayload(ids, dims));
             }
             case "clear_inventory" -> {
                 // Comme /clear sans argument : inventaire, armure, seconde main et grille d'artisanat du joueur
@@ -482,6 +519,49 @@ public final class WmiPayloads {
         player.teleportTo(level, target.getX() + 0.5, target.getY(), target.getZ() + 0.5, Set.of(),
                 player.getYRot(), player.getXRot(), true);
         player.sendOverlayMessage(Component.translatable("gui.wmi.biome.teleported", name, distance));
+    }
+
+    /**
+     * Onglet « Dimensions » : point d'apparition de la dimension. Monde d'apparition : point de réapparition du
+     * monde ; l'End : plate-forme d'obsidienne d'arrivée, recréée comme par un portail ; autres dimensions (Nether,
+     * dimensions des mods) : sol sûr au-dessus ou au-dessous de (0, 64, 0). Mêmes droits que les actions de monde.
+     */
+    private static void handleDimensionTeleport(ServerPlayer player, String dimensionId) {
+        if (!canRunWorldActions(player)) {
+            player.sendOverlayMessage(Component.translatable("gui.wmi.no_permission"));
+            return;
+        }
+        Identifier id = Identifier.tryParse(dimensionId);
+        if (id == null) {
+            return;
+        }
+        MinecraftServer server = player.level().getServer();
+        ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, id);
+        ServerLevel level = server.getLevel(key);
+        if (level == null) {
+            return;
+        }
+        LevelData.RespawnData respawn = server.getRespawnData();
+        double x;
+        double y;
+        double z;
+        if (key == Level.END) {
+            BlockPos platform = ServerLevel.END_SPAWN_POINT.below();
+            EndPlatformFeature.createEndPlatform(level, platform, true);
+            x = platform.getX() + 0.5;
+            y = platform.getY() + 1;
+            z = platform.getZ() + 0.5;
+        } else {
+            BlockPos origin = key == respawn.dimension() ? respawn.pos() : new BlockPos(0, 64, 0);
+            BlockPos target = safeStandingPos(level, origin);
+            x = target.getX() + 0.5;
+            y = target.getY();
+            z = target.getZ() + 0.5;
+        }
+        player.teleportTo(level, x, y, z, Set.of(), player.getYRot(), player.getXRot(), true);
+        // Nom traduit par WMI pour les dimensions de Minecraft, identifiant pour celles des mods
+        Component name = Component.translatableWithFallback("wmi.dimension." + id.getNamespace() + "." + id.getPath().replace('/', '.'), id.toString());
+        player.sendOverlayMessage(Component.translatable("gui.wmi.dimension.teleported", name));
     }
 
     /**

@@ -178,6 +178,12 @@ public final class WmiTests {
     }
 
     private static void testSearchAndFilters(RecipeIndex index) {
+        java.util.Map<String, int[]> counts = index.countsByGroup(ns -> ns);
+        check("comptes par onglet : la somme des objets vaut le total",
+                counts.values().stream().mapToInt(c -> c[0]).sum() == index.allItems().size());
+        check("comptes par onglet : un groupe unique regroupe tous les objets et toutes les recettes",
+                index.countsByGroup(ns -> "x").get("x")[0] == index.allItems().size()
+                        && index.countsByGroup(ns -> "x").get("x")[1] <= index.allRecipes().size());
         check("recherche vide renvoie tous les objets", index.search("").size() == index.allItems().size());
         check("recherche insensible aux accents (macerateur)",
                 index.search("macerateur").stream().anyMatch(i -> i.id().equals("exemplemod:macerator")));

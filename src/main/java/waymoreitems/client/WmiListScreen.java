@@ -108,6 +108,7 @@ abstract class WmiListScreen extends WmiScaledScreen {
         int x0 = (width - boxW) / 2;
         int y0 = (height - boxH) / 2;
         WmiDraw.drawFrostedPanel(g, x0, y0, boxW, boxH);
+        renderOutside(g, x0, y0, boxW, boxH, mouseX, mouseY);
         WmiDraw.drawText(g, font, title.getString(), x0 + 10, y0 + 7, th.textMain);
         // Confirmation récente : elle prend la place du sous-titre, à droite du titre, pendant trois secondes
         boolean flashing = System.currentTimeMillis() < flashUntil;
@@ -190,6 +191,15 @@ abstract class WmiListScreen extends WmiScaledScreen {
 
     int toolbarHeight() {
         return 0;
+    }
+
+    /** Éléments facultatifs posés contre la fenêtre, à l'extérieur (onglets carrés latéraux). */
+    void renderOutside(GuiGraphicsExtractor g, int x0, int y0, int boxW, int boxH, int mouseX, int mouseY) {
+    }
+
+    /** Zone cliquable hors de la liste (onglets latéraux), sans découpe par la zone visible. */
+    void addClickZone(int x, int y, int w, int h, Runnable action) {
+        zones.add(new Zone(x, y, w, h, action, null));
     }
 
     /** Bouton au style de « Paramètres ». */

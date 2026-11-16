@@ -207,6 +207,36 @@ final class WmiRightPanel {
         return tabs;
     }
 
+    private RecipeIndex countsIndex;
+    private int countsItems = -1;
+    private int countsRecipes = -1;
+    private Map<String, int[]> tabCounts = Map.of();
+
+    /** {« N objets », « M recettes »} de l'onglet actif (« Tous » : totaux du catalogue). */
+    String[] tabCountsTexts() {
+        RecipeIndex index = WmiClientIndex.get();
+        modTabs();
+        if (index != countsIndex || index.allItems().size() != countsItems || index.allRecipes().size() != countsRecipes) {
+            tabCounts = index.countsByGroup(this::tabKey);
+            countsIndex = index;
+            countsItems = index.allItems().size();
+            countsRecipes = index.allRecipes().size();
+        }
+        int items;
+        int recipes;
+        if (TAB_ALL.equals(selectedTabId)) {
+            items = countsItems;
+            recipes = countsRecipes;
+        } else {
+            int[] c = tabCounts.getOrDefault(selectedTabId, new int[2]);
+            items = c[0];
+            recipes = c[1];
+        }
+        return new String[] {
+                WmiText.s("wmi.tabs.count_items", String.format(Locale.ROOT, "%,d", items).replace(',', ' ')),
+                WmiText.s("wmi.tabs.count_recipes", String.format(Locale.ROOT, "%,d", recipes).replace(',', ' '))};
+    }
+
     void renderRightBinder(
             AbstractContainerScreen<?> screen,
             GuiGraphicsExtractor g,
@@ -245,7 +275,15 @@ final class WmiRightPanel {
         // Chaque partie est placée par la mise en page (ancrée sur les bords du panneau par défaut)
         List<ModTab> tabs = modTabs();
         GuiLayout.Rect tabsR = o.frame.place("rightPanel.tabs", panelW - 10, 19);
-        if (tabsR != null) {
+        if (!settings.catalogTabs) {
+            // Onglets masqués (onglet Catalogue de « Paramètres ») : catalogue entier, rangée réduite à rien pour
+            // que le titre et la recherche remontent
+            selectedTabId = TAB_ALL;
+            tabRow = null;
+            if (tabsR != null) {
+                o.frame.set("rightPanel.tabs", new GuiLayout.Rect(tabsR.x(), tabsR.y() - 6, tabsR.w(), 0));
+            }
+        } else if (tabsR != null) {
             renderModTabRow(g, font, tabs, tabsR.x(), tabsR.y(), tabsR.w(), tabsR.h(), mouseX, mouseY);
         }
 
@@ -279,6 +317,20 @@ final class WmiRightPanel {
             int reserve = modeBtnW > 0 && lastModeY < header.bottom() && header.y() < lastModeY + lastModeH ? modeBtnW : 0;
             drawText(g, font, WmiVector.trim(font, activeTitle, header.w() - 4 - reserve), header.x() + 1, header.y() + 2,
                     theme().textMain);
+            // Nombres d'objets et de recettes de l'onglet, à droite du titre, seulement si la place suffit
+            String[] counts = tabCountsTexts();
+            int itemsW = WmiVector.width(font, counts[0]);
+            int recipesW = WmiVector.width(font, counts[1]);
+            int gap = 4;
+            int countsW = itemsW + gap + 1 + gap + recipesW;
+            int free = header.w() - 4 - reserve - WmiVector.width(font, activeTitle) - 8;
+            if (countsW <= free) {
+                int cx = header.right() - reserve - countsW - 1;
+                drawText(g, font, counts[0], cx, header.y() + 2, theme().textMuted);
+                // Liseré vertical discret entre les deux nombres
+                bar(g, cx + itemsW + gap, header.y() + 1, cx + itemsW + gap + 1, header.y() + 10, theme().innerBorder);
+                drawText(g, font, counts[1], cx + itemsW + 2 * gap + 1, header.y() + 2, theme().textMuted);
+            }
         }
 
         // 3. Barre de recherche (le filtre « Fabricable » passe par le mot-clé !fab)
@@ -396,6 +448,50 @@ final class WmiRightPanel {
         o.buttons.drawn.add(new QuickButton(x, y, w, h, text != null ? text : "", tooltip, onClick, null));
     }
 
+    /** Clé de la dernière liste du catalogue : tant qu'elle ne change pas, la recherche et le tri ne sont pas refaits. */
+    private record CatalogKey(RecipeIndex index, String query, String tab, WmiSettings.CatalogSort sort,
+                              boolean hideNoRecipe, @Nullable String station, int inventoryHash) {
+    }
+
+    private @Nullable CatalogKey catalogKey;
+    private List<CatalogItem> catalogCache = List.of();
+
+    /**
+     * Objets de la grille : recherche, onglet actif, objets sans recette masqués et ordre choisis dans l'onglet
+     * Catalogue de « Paramètres ». Avec une machine ouverte, l'ordre de la recherche (objets de la machine en tête)
+     * est conservé. Liste recalculée seulement quand l'un de ses paramètres change.
+     */
+    List<CatalogItem> catalogItems(Map<String, Integer> inv, @Nullable String activeStation) {
+        RecipeIndex idx = WmiClientIndex.get();
+        // Onglets masqués : catalogue entier (aperçu de « Paramètres » compris, dessiné avant le panneau)
+        String tab = settings.catalogTabs ? selectedTabId : TAB_ALL;
+        CatalogKey key = new CatalogKey(idx, searchQuery, tab, settings.catalogSort, settings.hideNoRecipe,
+                activeStation, inv.hashCode());
+        if (key.equals(catalogKey)) {
+            return catalogCache;
+        }
+        List<CatalogItem> allMatched = idx.search(searchQuery, inv, false, activeStation);
+        List<CatalogItem> items = new ArrayList<>(allMatched.size());
+        for (CatalogItem it : allMatched) {
+            if (!TAB_ALL.equals(tab) && !tabKey(it.namespace()).equals(tab)) {
+                continue;
+            }
+            if (settings.hideNoRecipe && idx.recipesForOutput(it.id()).isEmpty()) {
+                continue;
+            }
+            items.add(it);
+        }
+        boolean stationOrder = activeStation != null && !activeStation.isBlank();
+        if (!stationOrder && settings.catalogSort == WmiSettings.CatalogSort.NAME) {
+            items.sort(Comparator.comparing(CatalogItem::normalizedName).thenComparing(CatalogItem::id));
+        } else if (!stationOrder && settings.catalogSort == WmiSettings.CatalogSort.ID) {
+            items.sort(Comparator.comparing(CatalogItem::id));
+        }
+        catalogKey = key;
+        catalogCache = List.copyOf(items);
+        return catalogCache;
+    }
+
     void renderCatalogGrid(
             AbstractContainerScreen<?> screen,
             GuiGraphicsExtractor g,
@@ -407,14 +503,7 @@ final class WmiRightPanel {
     ) {
         Map<String, Integer> inv = o.snapshotPlayerInventory();
         String activeStation = inferWorkstationFromScreen(screen);
-        List<CatalogItem> allMatched = WmiClientIndex.get().search(searchQuery, inv, false, activeStation);
-
-        List<CatalogItem> items = new ArrayList<>(allMatched.size());
-        for (CatalogItem it : allMatched) {
-            if (TAB_ALL.equals(selectedTabId) || tabKey(it.namespace()).equals(selectedTabId)) {
-                items.add(it);
-            }
-        }
+        List<CatalogItem> items = catalogItems(inv, activeStation);
 
         int icon = settings.gridIconSize;
         int slotStep = icon + 2;

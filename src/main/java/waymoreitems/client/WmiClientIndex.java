@@ -295,7 +295,19 @@ public final class WmiClientIndex {
         return Collections.unmodifiableList(tabs);
     }
 
+    /** Vrai pendant la lecture des infobulles par l'index : les ajouts de WMI aux infobulles s'abstiennent. */
+    static volatile boolean collectingTooltips = false;
+
     private static List<CatalogItem> buildCatalog(Minecraft mc) {
+        collectingTooltips = true;
+        try {
+            return buildCatalogLines(mc);
+        } finally {
+            collectingTooltips = false;
+        }
+    }
+
+    private static List<CatalogItem> buildCatalogLines(Minecraft mc) {
         STACK_BY_ID.clear();
         Map<String, String> modNames = new LinkedHashMap<>();
         modNames.put("minecraft", "Minecraft");

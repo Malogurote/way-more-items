@@ -242,6 +242,12 @@ public final class WmiOverlay {
         Minecraft mc = Minecraft.getInstance();
         // Noms d'objets en anglais pour tout le jeu (option) : recouvrir la table de traduction après chaque rechargement
         WmiNames.syncGameLanguage();
+        // Recherche du catalogue effacée au retour au jeu (option de l'onglet Catalogue de « Paramètres »)
+        if (settings.clearSearchOnClose && mc.gui.screen() == null && !panel.searchQuery.isEmpty()) {
+            panel.searchQuery = "";
+            panel.currentPage = 0;
+            panel.searchFocused = false;
+        }
         // Objectifs ajoutés depuis la fenêtre des recettes ou retirés : enregistrés au plus toutes les 2 secondes
         if (++goalsSaveTicks >= 40) {
             goalsSaveTicks = 0;
@@ -256,7 +262,7 @@ public final class WmiOverlay {
             checklist.useIndex(WmiClientIndex.peek());
         }
         List<String> completedNow = checklist.updateInventory(snapshotPlayerInventory());
-        if (!completedNow.isEmpty()) {
+        if (!completedNow.isEmpty() && settings.doneSound) {
             mc.player.playSound(SoundEvents.EXPERIENCE_ORB_PICKUP, 0.5F, 1.35F);
         }
     }

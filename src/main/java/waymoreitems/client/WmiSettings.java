@@ -72,6 +72,8 @@ public final class WmiSettings {
     String lastSavedGoals = "";
 
     WmiTheme currentTheme = WmiTheme.BLANC;
+    /** Dernier thème prédéfini choisi : rétabli quand « Personnaliser » est désactivé. */
+    WmiTheme presetTheme = WmiTheme.BLANC;
     /** Couleur du thème « Personnalisé » en teinte, saturation, valeur (0 à 1) ; par défaut un bleu moyen. */
     float customHue = 0.61F;
     float customSat = 0.62F;
@@ -94,7 +96,7 @@ public final class WmiSettings {
     boolean hudClockInGame = true;
     boolean hudClockShowMod = false;
     /** Widget de l'heure au plus petit cran dans le coin haut gauche de l'écran de jeu, Notes juste dessous. */
-    boolean hudCornerWidget = false;
+    boolean hudCornerWidget = true;
     /**
      * Taille propre de l'interface de WMI (voir {@link WmiUiScale}) : 1 à {@link #UI_SCALE_MAX}, {@link #UI_SCALE_GAME}
      * = comme le jeu, {@link #UI_SCALE_AUTO} = proportionnelle à la hauteur de la fenêtre (par défaut).
@@ -121,6 +123,40 @@ public final class WmiSettings {
     /** Position libre des Notes dans l'inventaire (proportion de l'écran, coin haut gauche) ; négative = mise en page. */
     double notesPosXRatio = -1.0;
     double notesPosYRatio = -1.0;
+
+    /** Ordre des objets du catalogue. */
+    public enum CatalogSort { MOD, NAME, ID }
+
+    /** Format de l'heure du widget : selon la langue (clé {@code wmi.time.twelve_hour}), 24 h ou 12 h. */
+    public enum TimeFormat { LANGUAGE, H24, H12 }
+
+    /** Ligne d'objectif atteinte : laissée en vert, barrée, ou masquée des Notes en jeu. */
+    public enum DoneBehavior { KEEP, STRIKE, HIDE }
+
+    /** Côté de l'écran de jeu où se placent le widget du coin et les Notes. */
+    public enum HudSide { LEFT, RIGHT }
+
+    public static final int PANEL_OPACITY_MIN = 40;
+
+    /** Nom du mod d'origine ajouté aux infobulles des objets. */
+    boolean modInTooltip = false;
+    /** Opacité des panneaux de WMI, en pourcentage de l'opacité du thème. */
+    int panelOpacity = 100;
+    boolean catalogTabs = true;
+    CatalogSort catalogSort = CatalogSort.MOD;
+    boolean hideNoRecipe = false;
+    /** Recherche du catalogue effacée au retour au jeu (sinon gardée jusqu'à la fermeture du jeu). */
+    boolean clearSearchOnClose = false;
+    TimeFormat timeFormat = TimeFormat.LANGUAGE;
+    /** Heure en couleur d'alerte à l'approche de la nuit (apparition des monstres). */
+    boolean nightAlert = false;
+    DoneBehavior doneBehavior = DoneBehavior.KEEP;
+    boolean doneSound = true;
+    HudSide hudSide = HudSide.LEFT;
+    /** Opacité du fond du widget du coin et des Notes en jeu, en pourcentage. */
+    int hudOpacity = 100;
+    boolean hideWithF1 = true;
+    boolean hideWithDebug = true;
 
     WmiSettings(PinnedChecklist checklist) {
         this.checklist = checklist;
@@ -155,6 +191,24 @@ public final class WmiSettings {
             }
             lastSavedGoals = checklist.serializeGoals();
         }
+        applyPreferences(props);
+    }
+
+    /**
+     * Tous les réglages de WMI rétablis (fenêtre « Paramètres », « Tout réinitialiser ») : Notes et objectifs
+     * conservés, touches de WMI remises par défaut par la fenêtre elle-même.
+     */
+    public void resetToDefaults() {
+        customHue = 0.61F;
+        customSat = 0.62F;
+        customVal = 0.94F;
+        applyPreferences(SettingsFile.empty());
+        WmiNames.syncGameLanguage();
+        save();
+    }
+
+    /** Réglages hors Notes et objectifs, lus clé par clé avec leur valeur par défaut. */
+    private void applyPreferences(SettingsFile props) {
         String[] hsv = props.string("customHsv", "").split(",");
         if (hsv.length == 3) {
             try {
@@ -168,6 +222,8 @@ public final class WmiSettings {
         WmiTheme preset = WmiTheme.preset(th);
         currentTheme = WmiTheme.CUSTOM_KEY.equals(th) ? WmiTheme.custom(customColor())
                 : (preset != null ? preset : WmiTheme.BLANC);
+        WmiTheme savedPreset = WmiTheme.preset(props.string("presetTheme", th));
+        presetTheme = currentTheme.isCustom() ? (savedPreset != null ? savedPreset : WmiTheme.BLANC) : currentTheme;
         WmiVector.setVanillaTheme(currentTheme.vanilla());
         sortOrder = props.enumValue("sortOrder", InventorySorter.SortOrder.class, InventorySorter.SortOrder.MOD_CATEGORY_NAME);
         rightPanelWidthRatio = props.decimal("rightPanelWidthRatio", 0.275, 0.16, 0.65);
@@ -181,7 +237,7 @@ public final class WmiSettings {
         showSunMoonLines = props.bool("hudSunMoonLines", true);
         hudClockInGame = props.bool("hudClockInGame", true);
         hudClockShowMod = props.bool("hudClockShowMod", false);
-        hudCornerWidget = props.bool("hudCornerWidget", false);
+        hudCornerWidget = props.bool("hudCornerWidget", true);
         uiScale = props.integer("uiScale", UI_SCALE_AUTO, UI_SCALE_AUTO, UI_SCALE_MAX);
         hudScale = props.decimal("hudScale", 1.0, HUD_SCALE_MIN, HUD_SCALE_MAX);
         hudPosXRatio = props.decimal("hudPosXRatio", -1);
@@ -196,11 +252,26 @@ public final class WmiSettings {
         notesPosXRatio = props.decimal("notesPosXRatio", -1);
         notesPosYRatio = props.decimal("notesPosYRatio", -1);
         WmiVector.setEnabled(props.bool("vectorUi", true));
+        modInTooltip = props.bool("modInTooltip", false);
+        panelOpacity = props.integer("panelOpacity", 100, PANEL_OPACITY_MIN, 100);
+        catalogTabs = props.bool("catalogTabs", true);
+        catalogSort = props.enumValue("catalogSort", CatalogSort.class, CatalogSort.MOD);
+        hideNoRecipe = props.bool("hideNoRecipe", false);
+        clearSearchOnClose = props.bool("clearSearchOnClose", false);
+        timeFormat = props.enumValue("timeFormat", TimeFormat.class, TimeFormat.LANGUAGE);
+        nightAlert = props.bool("nightAlert", false);
+        doneBehavior = props.enumValue("doneBehavior", DoneBehavior.class, DoneBehavior.KEEP);
+        doneSound = props.bool("doneSound", true);
+        hudSide = props.enumValue("hudSide", HudSide.class, HudSide.LEFT);
+        hudOpacity = props.integer("hudOpacity", 100, 0, 100);
+        hideWithF1 = props.bool("hideWithF1", true);
+        hideWithDebug = props.bool("hideWithDebug", true);
     }
 
     public void save() {
         Properties props = new Properties();
         props.setProperty("theme", currentTheme.name());
+        props.setProperty("presetTheme", presetTheme.name());
         props.setProperty("customHsv", String.format(Locale.ROOT, "%.4f,%.4f,%.4f", customHue, customSat, customVal));
         props.setProperty("sortOrder", sortOrder.name());
         props.setProperty("rightPanelWidthRatio", String.format(Locale.ROOT, "%.4f", rightPanelWidthRatio));
@@ -239,6 +310,20 @@ public final class WmiSettings {
         props.setProperty("notesPosXRatio", String.format(Locale.ROOT, "%.5f", notesPosXRatio));
         props.setProperty("notesPosYRatio", String.format(Locale.ROOT, "%.5f", notesPosYRatio));
         props.setProperty("vectorUi", Boolean.toString(WmiVector.preferred()));
+        props.setProperty("modInTooltip", Boolean.toString(modInTooltip));
+        props.setProperty("panelOpacity", Integer.toString(panelOpacity));
+        props.setProperty("catalogTabs", Boolean.toString(catalogTabs));
+        props.setProperty("catalogSort", catalogSort.name());
+        props.setProperty("hideNoRecipe", Boolean.toString(hideNoRecipe));
+        props.setProperty("clearSearchOnClose", Boolean.toString(clearSearchOnClose));
+        props.setProperty("timeFormat", timeFormat.name());
+        props.setProperty("nightAlert", Boolean.toString(nightAlert));
+        props.setProperty("doneBehavior", doneBehavior.name());
+        props.setProperty("doneSound", Boolean.toString(doneSound));
+        props.setProperty("hudSide", hudSide.name());
+        props.setProperty("hudOpacity", Integer.toString(hudOpacity));
+        props.setProperty("hideWithF1", Boolean.toString(hideWithF1));
+        props.setProperty("hideWithDebug", Boolean.toString(hideWithDebug));
         try {
             SettingsFile.storeAtomic(WmiPlatform.configFile("wmi-client.properties"), props, "Way More Items (WMI) - Parametres Client");
         } catch (IOException | RuntimeException ignored) {
@@ -431,6 +516,38 @@ public final class WmiSettings {
     void toggleVectorUi() {
         WmiVector.setEnabled(!WmiVector.preferred());
         save();
+    }
+
+    /** Thème choisi dans le nuancier : un préréglage, ou « Personnalisé » ({@code null}). */
+    public void selectTheme(@Nullable WmiTheme preset) {
+        currentTheme = preset != null ? preset : WmiTheme.custom(customColor());
+        if (preset != null) {
+            presetTheme = preset;
+        }
+        WmiVector.setVanillaTheme(currentTheme.vanilla());
+        save();
+    }
+
+    /** Thème prédéfini suivant ou précédent ({@code delta} = ±1), « Personnalisé » exclu. */
+    public void cyclePreset(int delta) {
+        int index = Math.max(0, WmiTheme.PRESETS.indexOf(presetTheme));
+        selectTheme(WmiTheme.PRESETS.get(Math.floorMod(index + delta, WmiTheme.PRESETS.size())));
+    }
+
+    /** Interrupteur « Personnaliser » : thème tiré de la couleur choisie, ou retour au dernier thème prédéfini. */
+    public void setCustomize(boolean on) {
+        selectTheme(on ? null : presetTheme);
+    }
+
+    /** Fond de panneau du thème actif, à l'opacité réglée dans « Paramètres ». */
+    public int panelBg() {
+        return scaleAlpha(currentTheme.panelBg, panelOpacity / 100.0);
+    }
+
+    /** Couleur ARGB dont l'alpha est multiplié par {@code factor} (0 à 1). */
+    static int scaleAlpha(int argb, double factor) {
+        int a = (int) Math.round(((argb >>> 24) & 0xFF) * Math.max(0.0, Math.min(1.0, factor)));
+        return (a << 24) | (argb & 0xFFFFFF);
     }
 
     /** Parcourt les préréglages puis « Personnalisé » (dernier de la liste). */
