@@ -883,5 +883,6 @@ final class WmiTests {
         DedicatedRecipeTests.run(WmiTests::check);
         CoreLogicTests.run(WmiTests::check);
         ApiTests.run(WmiTests::check);
+        WorldNotesTests.run(WmiTests::check);
     }
 }

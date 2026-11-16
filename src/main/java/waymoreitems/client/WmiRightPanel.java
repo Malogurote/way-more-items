@@ -272,13 +272,13 @@ final class WmiRightPanel {
         Minecraft mc = Minecraft.getInstance();
         boolean admin = o.canGiveItems(mc);
         boolean carryingItem = !screen.getMenu().getCarried().isEmpty();
-        boolean hoveringPanelWithItem = carryingItem
+        boolean hoveringPanelWithItem = carryingItem && WmiOverlayInput.canDeleteCarried(mc)
                 && mouseX >= panelX && mouseX < panelX + panelW
                 && mouseY >= panelY && mouseY < panelY + panelH;
 
         drawFrostedPanel(g, panelX, panelY, panelW, panelH);
 
-        // Objet tenu au-dessus du panneau : bordure rouge de suppression directe
+        // Objet tenu au-dessus du panneau, en créatif : bordure rouge de suppression directe
         if (hoveringPanelWithItem) {
             drawBorder(g, panelX, panelY, panelW, panelH, DELETE_BORDER_RED);
             drawBorder(g, panelX + 1, panelY + 1, panelW - 2, panelH - 2, DELETE_BORDER_RED);

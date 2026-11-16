@@ -7,6 +7,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.Rect2i;
@@ -16,10 +18,13 @@ import net.minecraft.server.permissions.Permissions;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.storage.LevelResource;
 import waymoreitems.WmiPayloads;
 import waymoreitems.client.WmiButtons.QuickButton;
 import waymoreitems.core.GuiLayout;
 import waymoreitems.core.PinnedChecklist;
+import waymoreitems.core.WorldKey;
+import waymoreitems.core.WorldNotes;
 
 import org.jspecify.annotations.Nullable;
 
@@ -33,7 +38,7 @@ import java.util.Map;
 /**
  * Surcouche de Way More Items (WMI) sur les inventaires et l'écran de jeu : coordination mince des composants.
  * <ul>
- *   <li>{@link WmiSettings} : réglages, Notes et objectifs enregistrés ;</li>
+ *   <li>{@link WmiSettings} : réglages enregistrés ({@link WorldNotes} : Notes et objectifs de chaque monde) ;</li>
  *   <li>{@link WmiToolbar} : barre d'outils, boutons « Paramètres » et bascule WMI / JEI ;</li>
  *   <li>{@link WmiRightPanel} : panneau de droite (onglets, recherche, catalogue, menu du clic droit) ;</li>
  *   <li>{@link WmiNotesPanel} : Notes de l'inventaire et de l'écran de jeu ;</li>
@@ -48,7 +53,9 @@ import java.util.Map;
 public final class WmiOverlay {
 
     final PinnedChecklist checklist = new PinnedChecklist();
-    final WmiSettings settings = new WmiSettings(checklist);
+    /** Notes et objectifs du monde ou serveur en cours, un fichier par monde sous {@code config/wmi/notes}. */
+    final WorldNotes worldNotes = new WorldNotes(checklist, WmiPlatform.configDir().resolve("wmi").resolve("notes"));
+    final WmiSettings settings = new WmiSettings(checklist, worldNotes);
     final WmiButtons buttons = new WmiButtons();
     final WmiVanillaBook book = new WmiVanillaBook(settings);
     final WmiNotesPanel notes;
@@ -61,6 +68,11 @@ public final class WmiOverlay {
 
     boolean visible = true;
     private int goalsSaveTicks;
+    /** Connexion dont le monde a été identifié en dernier (une nouvelle connexion : monde à identifier). */
+    private @Nullable ClientPacketListener worldConnection;
+    private @Nullable WorldKey worldKey;
+    /** Liste qui vient d'être chargée : les objectifs déjà réunis ne tintent pas. */
+    private boolean silentCompletion;
 
     /** Calcul de mise en page de l'image en cours (relevé et sous-rectangles). */
     GuiLayout.Resolver frame;
@@ -284,12 +296,15 @@ public final class WmiOverlay {
             panel.currentPage = 0;
             panel.searchFocused = false;
         }
+        // Notes du monde ou serveur en cours (toutes dimensions confondues) : liste rechargée au changement de monde ;
+        // la saisie en cours (champ des Notes) n'est pas touchée et ira dans la nouvelle liste
+        if (worldNotes.switchTo(currentWorldKey(mc))) {
+            silentCompletion = true;
+        }
         // Objectifs ajoutés depuis la fenêtre des recettes ou retirés : enregistrés au plus toutes les 2 secondes
         if (++goalsSaveTicks >= 40) {
             goalsSaveTicks = 0;
-            if (!checklist.serializeGoals().equals(settings.lastSavedGoals)) {
-                settings.save();
-            }
+            worldNotes.flush();
         }
         if (mc.player == null || checklist.isEmpty()) {
             return;
@@ -298,9 +313,38 @@ public final class WmiOverlay {
             checklist.useIndex(WmiClientIndex.peek());
         }
         List<String> completedNow = checklist.updateInventory(snapshotPlayerInventory());
+        if (silentCompletion) {
+            silentCompletion = false;
+            return;
+        }
         if (!completedNow.isEmpty() && settings.doneSound) {
             mc.player.playSound(SoundEvents.EXPERIENCE_ORB_PICKUP, 0.5F, 1.35F);
         }
+    }
+
+    /**
+     * Monde ou serveur en cours, identifié une fois par connexion : dossier de sauvegarde en solo (hôte d'un monde
+     * ouvert au réseau compris), adresse du serveur en multijoueur, nom pour un Realm ; {@code null} hors d'un monde.
+     */
+    private @Nullable WorldKey currentWorldKey(Minecraft mc) {
+        ClientPacketListener connection = mc.level == null ? null : mc.getConnection();
+        if (connection != worldConnection) {
+            worldConnection = connection;
+            worldKey = connection == null ? null : identifyWorld(mc);
+        }
+        return worldKey;
+    }
+
+    private static @Nullable WorldKey identifyWorld(Minecraft mc) {
+        if (mc.isLocalServer() && mc.getSingleplayerServer() != null) {
+            java.nio.file.Path folder = mc.getSingleplayerServer().getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize().getFileName();
+            return folder == null ? null : WorldKey.singleplayer(folder.toString());
+        }
+        ServerData server = mc.getCurrentServer();
+        if (server == null) {
+            return null;
+        }
+        return server.isRealm() ? WorldKey.realm(server.name) : WorldKey.server(server.ip);
     }
 
     // ==================== ÉCRAN DE JEU ====================

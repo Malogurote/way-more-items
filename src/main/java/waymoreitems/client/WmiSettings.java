@@ -39,6 +39,7 @@ import waymoreitems.core.ClientSettings;
 import waymoreitems.core.GuiLayout;
 import waymoreitems.core.InventorySorter;
 import waymoreitems.core.PinnedChecklist;
+import waymoreitems.core.WorldNotes;
 import waymoreitems.core.RecipeIndex;
 import waymoreitems.core.SettingsFile;
 import waymoreitems.core.ThemePalette;
@@ -58,24 +59,25 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * Réglages de l'interface (fenêtre « Paramètres », positions et tailles réglées à la souris), Notes et objectifs
- * compris, lus et enregistrés dans {@code config/wmi-client.properties} par {@link SettingsFile}. Les réglages sans
+ * Réglages de l'interface (fenêtre « Paramètres », positions et tailles réglées à la souris) et choix de recettes de
+ * l'arbre, lus et enregistrés dans {@code config/wmi-client.properties} par {@link SettingsFile} ; les Notes et
+ * objectifs, propres à chaque monde, sont dans les fichiers de {@link WorldNotes}. Les réglages sans
  * lien avec le rendu, leurs bornes et leur lecture sont dans {@link ClientSettings} (noyau, testé).
  */
 public final class WmiSettings extends ClientSettings {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private final PinnedChecklist checklist;
-    /** Objectifs tels qu'enregistrés la dernière fois (l'enregistrement différé compare à cette valeur). */
-    String lastSavedGoals = "";
+    private final WorldNotes worldNotes;
 
     WmiTheme currentTheme = WmiTheme.ANTHRACITE;
     /** Dernier thème prédéfini choisi : rétabli quand « Personnaliser » est désactivé. */
     WmiTheme presetTheme = WmiTheme.ANTHRACITE;
     WmiToolbar.UtilityBarPosition utilityBarPosition = WmiToolbar.UtilityBarPosition.LEFT_VERTICAL;
 
-    WmiSettings(PinnedChecklist checklist) {
+    WmiSettings(PinnedChecklist checklist, WorldNotes worldNotes) {
         this.checklist = checklist;
+        this.worldNotes = worldNotes;
     }
 
     public WmiTheme theme() {
@@ -86,21 +88,13 @@ public final class WmiSettings extends ClientSettings {
 
     void load() {
         // Lecture clé par clé avec repli (SettingsFile) : une valeur illisible ne coûte que cette clé ; un fichier
-        // illisible est copié à côté (.illisible) avant d'être réécrit. Notes et objectifs sont lus en premier.
+        // illisible est copié à côté (.illisible) avant d'être réécrit. Les Notes et objectifs enregistrés ici avant
+        // les listes par monde sont confiés à WorldNotes, qui les rattache au premier monde ouvert ; ils restent dans
+        // ce fichier jusque-là.
         SettingsFile props = SettingsFile.load(WmiPlatform.configFile("wmi-client.properties"));
-        if (checklist.notes().isEmpty()) {
-            decodeNotes(props.string("savedNotes", ""), checklist);
-        }
+        worldNotes.setLegacy(props.string("savedNotes", ""), props.string("savedGoals", ""));
+        worldNotes.onLegacyAdopted(this::save);
         checklist.recipeChoices().load(props.string("treeRecipes", ""));
-        if (checklist.goalCount() == 0) {
-            try {
-                checklist.loadGoals(props.string("savedGoals", ""));
-            } catch (RuntimeException e) {
-                LOGGER.warn("Could not read the saved goals", e);
-                // objectifs illisibles : liste vide, le reste des réglages est lu normalement
-            }
-            lastSavedGoals = checklist.serializeGoals();
-        }
         applyPreferences(props);
     }
 
@@ -136,9 +130,10 @@ public final class WmiSettings extends ClientSettings {
         props.setProperty("presetTheme", presetTheme.name());
         props.setProperty("utilityBarPosition", utilityBarPosition.name());
         props.setProperty("vectorUi", Boolean.toString(WmiVector.preferred()));
-        props.setProperty("savedNotes", encodeNotes(checklist));
-        lastSavedGoals = checklist.serializeGoals();
-        props.setProperty("savedGoals", lastSavedGoals);
+        if (worldNotes.legacyPending()) {
+            props.setProperty("savedNotes", worldNotes.legacyNotes());
+            props.setProperty("savedGoals", worldNotes.legacyGoals());
+        }
         props.setProperty("treeRecipes", checklist.recipeChoices().serialize());
         try {
             SettingsFile.storeAtomic(WmiPlatform.configFile("wmi-client.properties"), props, "Way More Items (WMI) - Parametres Client");
@@ -146,6 +141,7 @@ public final class WmiSettings extends ClientSettings {
             LOGGER.warn("Could not save the settings file", e);
             // enregistrement retenté à la prochaine modification ; l'ancien fichier reste intact (écriture atomique)
         }
+        worldNotes.flush();
     }
 
     // ==================== ACCÈS POUR LA FENÊTRE « PARAMÈTRES » (enregistrement immédiat) ====================

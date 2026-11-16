@@ -518,6 +518,38 @@ public final class PinnedChecklist {
     // ==================== SAUVEGARDE ====================
 
     /**
+     * Objectif tel qu'il est enregistré : arbre de fabrication ({@code craft}, avec ses choix de recettes) ou objet
+     * libre. L'arbre lui-même n'est pas enregistré : il est recalculé à la relecture.
+     */
+    public record SavedGoal(boolean craft, int count, String itemId, Map<String, String> preferred) {
+        public SavedGoal {
+            Objects.requireNonNull(itemId, "itemId");
+            preferred = preferred == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(preferred));
+        }
+    }
+
+    /** Objectifs dans l'ordre d'affichage, pour l'enregistrement. */
+    public List<SavedGoal> savedGoals() {
+        List<SavedGoal> out = new ArrayList<>(goals.size());
+        for (Goal g : goals) {
+            out.add(new SavedGoal(g.craft, g.count, g.itemId, g.preferred));
+        }
+        return Collections.unmodifiableList(out);
+    }
+
+    /** Ajoute un objectif relu (quantité inférieure à 1 ou objet vide : ignoré). */
+    public void addSavedGoal(SavedGoal goal) {
+        if (goal == null || goal.count() < 1 || goal.itemId().isBlank()) {
+            return;
+        }
+        if (goal.craft()) {
+            pinCraft(goal.itemId(), goal.count(), goal.preferred(), null);
+        } else {
+            pinOrIncrementItem(goal.itemId(), goal.count());
+        }
+    }
+
+    /**
      * Objectifs sous forme de texte, une ligne par objectif : {@code C<TAB>quantité<TAB>objet<TAB>objet=recette;...}
      * pour un arbre, {@code I<TAB>quantité<TAB>objet} pour un objet libre. Les arbres sont recalculés à la relecture.
      */

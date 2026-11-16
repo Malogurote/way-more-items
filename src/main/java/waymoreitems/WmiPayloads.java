@@ -71,7 +71,7 @@ import java.util.UUID;
  *   <li>{@link GivePayload} : donne un objet en quantité demandée (mêmes droits, ou mode créatif) ;</li>
  *   <li>{@link SortPayload} : trie l'inventaire du joueur ou le conteneur ouvert en respectant les cases verrouillées (autorisé en survie) ;</li>
  *   <li>{@link PlaceRecipePayload} : bouton « Placer dans la grille » : la recette est placée dans la grille d'artisanat ouverte comme par le livre de recettes (autorisé en survie) ;</li>
- *   <li>{@link DeleteCarriedPayload} : détruit l'objet tenu au curseur, déposé sur le panneau de droite ;</li>
+ *   <li>{@link DeleteCarriedPayload} : détruit l'objet tenu au curseur, déposé sur le panneau de droite (créatif seulement) ;</li>
  *   <li>{@link GiveBookPayload} : donne un livre enchanté (catalogue des enchantements ; droits du don) ;</li>
  *   <li>{@link BiomeTeleportPayload} : téléporte au biome demandé le plus proche (droits des actions de monde) ;</li>
  *   <li>{@link DimensionTeleportPayload} : téléporte au point d'apparition d'une dimension (mêmes droits) ;</li>
@@ -605,6 +605,10 @@ public final class WmiPayloads {
     }
 
     private static void handleDeleteCarried(ServerPlayer player, boolean singleItem) {
+        // Suppression réservée au mode créatif (le client ne l'envoie pas ailleurs ; un client modifié non plus)
+        if (!player.isCreative()) {
+            return;
+        }
         AbstractContainerMenu menu = player.containerMenu != null ? player.containerMenu : player.inventoryMenu;
         ItemStack carried = menu.getCarried();
         if (!carried.isEmpty()) {

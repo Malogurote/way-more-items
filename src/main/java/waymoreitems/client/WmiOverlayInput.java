@@ -143,9 +143,16 @@ final class WmiOverlayInput {
         return r != null && r.contains(mx, my);
     }
 
+    /**
+     * Objet tenu déposé sur le panneau de droite : détruit en mode créatif seulement ; dans les autres modes, le
+     * dépôt est ignoré et l'objet reste au curseur (rien n'est jeté au sol : le clic est absorbé par l'appelant).
+     */
     void deleteCarriedItemInWmi(AbstractContainerScreen<?> screen, boolean singleItem, Minecraft mc) {
         AbstractContainerMenu menu = screen.getMenu();
         ItemStack carried = menu.getCarried();
+        if (!canDeleteCarried(mc)) {
+            return;
+        }
         // Serveur sans WMI : rien n'est supprimé, même côté client (sinon désynchronisation de l'inventaire)
         if (carried.isEmpty() || !WmiNetwork.send(new WmiPayloads.DeleteCarriedPayload(singleItem))) {
             return;
@@ -156,6 +163,11 @@ final class WmiOverlayInput {
             menu.setCarried(ItemStack.EMPTY);
         }
         playClickSound(mc);
+    }
+
+    /** Suppression par dépôt sur le panneau de droite : mode créatif seulement. */
+    static boolean canDeleteCarried(Minecraft mc) {
+        return mc.player != null && mc.player.isCreative();
     }
 
     public boolean onMouseClicked(AbstractContainerScreen<?> screen, MouseButtonEvent event, boolean doubleClick) {
@@ -182,8 +194,8 @@ final class WmiOverlayInput {
         int btn = event.button();
         Minecraft mc = Minecraft.getInstance();
 
-        // 0. Si le joueur tient un objet avec le curseur et clique dans le panneau WMI de droite :
-        //    l'objet disparaît immédiatement au lieu d'être jeté au sol !
+        // 0. Objet tenu au curseur et clic dans le panneau de droite : en créatif, l'objet disparaît ; ailleurs, le
+        //    clic est absorbé et l'objet reste au curseur (jamais jeté au sol)
         if (!screen.getMenu().getCarried().isEmpty() && isInsideRightPanel(mx, my)) {
             if (isLeftClick(btn) || isRightClick(btn)) {
                 deleteCarriedItemInWmi(screen, isRightClick(btn), mc);
@@ -335,7 +347,7 @@ final class WmiOverlayInput {
         double mx = event.x() / o.lastFactor;
         double my = event.y() / o.lastFactor;
         int btn = event.button();
-        // Si le joueur relâche un objet glissé depuis l'inventaire dans le panneau de droite WMI : suppression directe !
+        // Objet glissé depuis l'inventaire et relâché sur le panneau de droite : supprimé en créatif, gardé ailleurs
         if (o.visible && !screen.getMenu().getCarried().isEmpty() && isInsideRightPanel(mx, my)) {
             if (isLeftClick(btn) || isRightClick(btn)) {
                 deleteCarriedItemInWmi(screen, isRightClick(btn), Minecraft.getInstance());
