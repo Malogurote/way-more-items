@@ -214,8 +214,9 @@ final class WmiTests {
         // Touches R (recettes) et U (usages)
         check("touche R : lingot d'acier a 2 recettes (haut-fourneau et bloc)",
                 index.recipesForOutput("exemplemod:steel_ingot").size() == 2);
-        check("touche U : charbon sert dans fonte, macerateur et catalyseur haut-fourneau",
-                index.recipesUsing("minecraft:coal").size() == 3);
+        check("touche U : charbon sert au macerateur et en catalyseur du haut-fourneau, pas comme combustible du four",
+                index.recipesUsing("minecraft:coal").size() == 2
+                        && index.recipesUsing("minecraft:coal").stream().noneMatch(r -> "minecraft:smelting".equals(r.typeId())));
         check("touche U sur une machine (Macerateur) renvoie ses recettes",
                 index.recipesUsing("exemplemod:macerator").size() == 1);
 

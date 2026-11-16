@@ -27,6 +27,13 @@ import java.util.regex.Pattern;
  * - {@code A | B} : union (OU logique) entre deux requêtes complètes.
  */
 public final class RecipeIndex {
+    /**
+     * Recettes de cuisson de Minecraft dont le catalyseur est le combustible : leurs catalyseurs ne sont pas
+     * indexés comme usages (sans quoi chaque objet qui brûle listerait toutes les recettes du four).
+     */
+    static final Set<String> FUELLED_COOKING_TYPES = Set.of(
+            "minecraft:smelting", "minecraft:blasting", "minecraft:smoking", "minecraft:campfire_cooking");
+
     private final List<CatalogItem> items;
     private final Map<String, CatalogItem> itemById;
     private final List<RecipeEntry> recipes;
@@ -88,9 +95,11 @@ public final class RecipeIndex {
                     touchedItems.add(alt);
                 }
             }
+            // Combustible du four (tous les combustibles du jeu, établi compris) : pas un usage de chacun d'eux
+            boolean fuelOnly = FUELLED_COOKING_TYPES.contains(r.typeId());
             for (RecipeEntry.IngredientSlot cat : r.catalysts()) {
                 for (String alt : cat.alternatives()) {
-                    if (seenInputs.add(alt)) {
+                    if (!fuelOnly && seenInputs.add(alt)) {
                         inMap.computeIfAbsent(alt, k -> new ArrayList<>()).add(r);
                     }
                     touchedItems.add(alt);
@@ -165,8 +174,9 @@ public final class RecipeIndex {
     }
 
     /**
-     * Touche U : toutes les recettes qui emploient {@code itemId} comme ingrédient, catalyseur,
-     * ainsi que celles exécutées par {@code itemId} s'il s'agit d'un poste de travail (machine).
+     * Touche U : les recettes exécutées par {@code itemId} s'il s'agit d'un poste de travail (machine), en tête,
+     * puis celles qui l'emploient comme ingrédient ou catalyseur. Le combustible des recettes de cuisson
+     * ({@link #FUELLED_COOKING_TYPES}) n'en est pas un usage.
      */
     public List<RecipeEntry> recipesUsing(String itemId) {
         List<RecipeEntry> asInput = byInput.getOrDefault(itemId, List.of());
@@ -178,8 +188,8 @@ public final class RecipeIndex {
             return asStation;
         }
         Set<RecipeEntry> merged = new LinkedHashSet<>(asInput.size() + asStation.size());
-        merged.addAll(asInput);
         merged.addAll(asStation);
+        merged.addAll(asInput);
         return List.copyOf(merged);
     }
 

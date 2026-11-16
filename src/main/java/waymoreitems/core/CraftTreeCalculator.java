@@ -384,11 +384,17 @@ public final class CraftTreeCalculator {
      * en sortie) d'un objet lui-même fabriqué uniquement avec l'objet visé (ou un ancêtre) : cristal de certus tiré
      * d'une variante décorative de son bloc, elle-même faite de cristaux. Généralise la décompression directe (bloc
      * vers lingots) aux chaînes de plusieurs étapes. Si toutes les recettes d'un objet sont de ce genre, il se
-     * récolte dans le monde et devient une matière première. Les recettes de 1 pour 1 (variantes décoratives) ne
-     * sont jamais concernées : dans un cycle pur, seul le sens du démontage désigne la matière d'origine.
+     * récolte dans le monde et devient une matière première. Une recette de 1 pour 1 est aussi concernée, sauf en
+     * fabrication ou en cuisson de Minecraft ({@link #isNaturalOneToOne}) : tailleur de pierre ou machine qui ne
+     * fait que retransformer (pierre taillée tirée de la pierre au tailleur ou par l'entropie d'AE2, alors que la
+     * pierre se cuit à partir de pierre taillée : la pierre taillée se récolte en minant).
      */
     private static boolean isRoundTrip(RecipeIndex index, RecipeEntry r, String itemId, Set<String> ancestors) {
-        if (r.inputs().size() != 1 || r.inputs().get(0).count() != 1 || r.outputCount(itemId) < 2) {
+        if (r.inputs().size() != 1 || r.inputs().get(0).count() != 1) {
+            return false;
+        }
+        int produced = r.outputCount(itemId);
+        if (produced < 2 && !(produced == 1 && !isNaturalOneToOne(r.typeId()))) {
             return false;
         }
         Set<String> sources = new HashSet<>(ancestors);
@@ -396,6 +402,14 @@ public final class CraftTreeCalculator {
         Set<String> visiting = new HashSet<>();
         visiting.add(itemId);
         return recipeNeeds(index, r, sources, visiting, ROUND_TRIP_DEPTH, new int[]{ROUND_TRIP_BUDGET});
+    }
+
+    /**
+     * Types dont une recette de 1 pour 1 garde le sens naturel même au sein d'un cycle : fabrication (variantes
+     * décoratives, laissées aux autres règles) et cuisson de Minecraft (pierre cuite à partir de pierre taillée).
+     */
+    private static boolean isNaturalOneToOne(String typeId) {
+        return typeId.startsWith("minecraft:crafting") || RecipeIndex.FUELLED_COOKING_TYPES.contains(typeId);
     }
 
     /** Vrai si une entrée de {@code r} n'admet que des objets fabriqués uniquement à partir de {@code sources}. */

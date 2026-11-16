@@ -37,7 +37,45 @@ final class CraftTreeChoiceTests {
         return r == null ? null : r.id();
     }
 
+    /**
+     * Pierre taillée et pierre (Minecraft 26.3) : pierre cuite à partir de pierre taillée, pierre taillée retaillée
+     * à partir de pierre au tailleur ou par une machine (entropie d'AE2) ; four = 8 pierres taillées ; briques de
+     * pierre retaillées à partir de pierre.
+     */
+    private static RecipeIndex stoneSample() {
+        List<CatalogItem> items = List.of(item("t:cobble", "Pierre taillée"), item("t:stone", "Pierre"),
+                item("t:furnace", "Four"), item("t:bricks", "Briques de pierre"));
+        List<RecipeEntry> recipes = List.of(
+                recipe("t:stone_smelt", "minecraft:smelting", "Four", "t:cobble", 1, "t:stone"),
+                recipe("t:cobble_from_stone", "minecraft:stonecutting", "Tailleur", "t:stone", 1, "t:cobble"),
+                recipe("t:cobble_entropy", "ae2:entropy", "Manipulation d'entropie", "t:stone", 1, "t:cobble"),
+                recipe("t:furnace", "minecraft:crafting_shaped", "Fabrication", "t:cobble", 8, "t:furnace"),
+                recipe("t:bricks_from_stone", "minecraft:stonecutting", "Tailleur", "t:stone", 1, "t:bricks"));
+        return new RecipeIndex(items, recipes);
+    }
+
+    private static void testStonecutterRoundTrip(BiConsumer<String, Boolean> check) {
+        RecipeIndex idx = stoneSample();
+        CraftPlanCache cache = new CraftPlanCache(8);
+        CraftTreeCalculator.CraftPlan furnace = cache.plan(idx, "t:furnace", 1, Map.of(), Map.of());
+        check.accept("arbre : la pierre taillée se récolte, sans retaille de la pierre",
+                CraftPlanCache.recipeUsedFor(furnace.root(), "t:cobble") == null
+                        && furnace.missingRaw().getOrDefault("t:cobble", 0) == 8
+                        && !furnace.missingRaw().containsKey("t:stone"));
+        CraftTreeCalculator.CraftPlan stone = cache.plan(idx, "t:stone", 1, Map.of(), Map.of());
+        check.accept("arbre : la pierre se cuit à partir de pierre taillée",
+                stone.missingRaw().getOrDefault("t:cobble", 0) == 1 && !stone.missingRaw().containsKey("t:stone"));
+        CraftTreeCalculator.CraftPlan bricks = cache.plan(idx, "t:bricks", 1, Map.of(), Map.of());
+        check.accept("arbre : une vraie retaille (briques) reste au tailleur",
+                bricks.missingRaw().getOrDefault("t:cobble", 0) == 1);
+        CraftTreeCalculator.CraftPlan stocked = cache.plan(idx, "t:furnace", 1, Map.of("t:stone", 8), Map.of());
+        RecipeEntry used = CraftPlanCache.recipeUsedFor(stocked.root(), "t:cobble");
+        check.accept("arbre : pierre en stock, la retaille en pierre taillée reste proposée",
+                used != null && ("t:cobble_from_stone".equals(used.id()) || "t:cobble_entropy".equals(used.id())));
+    }
+
     static void run(BiConsumer<String, Boolean> check) {
+        testStonecutterRoundTrip(check);
         RecipeIndex idx = sample();
         CraftPlanCache cache = new CraftPlanCache(8);
 
