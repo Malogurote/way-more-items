@@ -13,7 +13,7 @@ Ce qu'il propose :
 - des raccourcis de type créatif : heure, météo, soin et nourriture, nettoyage des objets au sol, horloge en jeu (ce qui passe par le serveur est masqué si le serveur n'a pas WMI) ;
 - des thèmes de couleurs, une taille d'interface propre et un fichier de mise en page (`config/wmi-layout.json`) rechargé à chaud ;
 - l'anglais, le français, l'allemand, l'espagnol, l'italien et le portugais du Brésil ;
-- une petite API publique (`waymoreitems.api`) pour que d'autres mods décrivent leurs mises en page de recettes.
+- une petite API publique (`waymoreitems.api`, jar `wmi-api` à part) pour que d'autres mods ajoutent leurs recettes, mises en page et fiches.
 
 > WMI en est à ses débuts (0.1.0) et NeoForge 26.3 est encore en bêta : il reste des aspérités.
 
@@ -43,6 +43,16 @@ gradle build                            # jar du mod dans build/libs
 ```
 
 Le client de développement tourne dans `run/` ; la propriété Gradle `wmiGameDir` permet d'utiliser un autre dossier.
+
+## Pour les développeurs de mods
+
+WMI lit seul l'affichage des recettes de Minecraft. Un mod peut aller plus loin par le jar `wmi-api` (`gradle apiJar`, MIT, interfaces et types simples seulement, version `1.0.0`). Compilez contre lui en `compileOnly`, ne l'embarquez jamais et déclarez WMI comme dépendance facultative : sans WMI, rien n'en est chargé.
+
+**Mise en page sans Java** : déposez `assets/<modid>/wmi_layouts/<type_de_recette>.json` dans vos ressources (le type de recette vaut par défaut `<modid>:<chemin>`) ; le format est celui de l'exemple de la version anglaise ([README.md](README.md)) : `format`, `title`, `size`, `workstations`, `slots` (rôle `input`, `catalyst` ou `output`), `arrows`, `gauges` (`energy` ou `fluid`), `flame`.
+
+**Extension en Java** : une classe annotée `@WmiPlugin(api = WmiApi.VERSION)` qui implémente `WmiExtension` ; sa méthode `register` inscrit des recettes (`addRecipes`), des mises en page (`addLayout`), des fiches d'information (`addInfo`), des genres d'ingrédients (`addIngredientKind`) et les types que l'arbre de fabrication doit ignorer (`excludeFromCraftTree`). Exemple complet dans [README.md](README.md).
+
+Les ingrédients sont des clés : un objet par son identifiant nu, tout autre genre sous la forme `<genre>@<id>` (`fluid@minecraft:water`, quantités en mB). Versions strictes : une extension compilée pour `X.Y.Z` se charge sur toute `X.y` avec `y >= Y` ; sinon elle est ignorée, avec un avertissement dans le journal.
 
 ## Contribuer
 

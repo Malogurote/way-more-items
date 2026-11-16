@@ -331,6 +331,7 @@
   "wmi.recipe.tree_added": "Árvore adicionada às notas",
   "wmi.recipe.place_in_grid": "Colocar na grade",
   "wmi.recipe.place_in_grid_tip": "Coloca os ingredientes do seu inventário na grade aberta",
+  "wmi.recipe.information": "Informações",
   "wmi.recipe.added_none": "Nenhum ingrediente",
   "wmi.recipe.added": "%s item adicionado às notas",
   "wmi.recipe.added.many": "%s itens adicionados às notas",

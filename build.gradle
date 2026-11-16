@@ -14,6 +14,20 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
+// API publique (src/api/java) : Java pur, sans Minecraft ni NeoForge sur son chemin de compilation, publiée à part
+// (jar « -api ») sous la même licence MIT ; le mod la compile et l'embarque.
+sourceSets {
+    api
+    main {
+        compileClasspath += sourceSets.api.output
+        runtimeClasspath += sourceSets.api.output
+    }
+    test {
+        compileClasspath += sourceSets.api.output
+        runtimeClasspath += sourceSets.api.output
+    }
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
@@ -39,6 +53,7 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
+            sourceSet(sourceSets.api)
         }
     }
 }
@@ -87,8 +102,8 @@ tasks.register('wmiTests', JavaExec) {
 // (propriété Gradle « wmiForbiddenRefs », mots séparés par des virgules, facultative), ou si le noyau cite Minecraft.
 // WMI doit rester utilisable seul.
 tasks.register('verifierCloisonnement') {
-    def dossiers = [file('src/main'), file('src/test')]
-    def dossiersNoyau = [file('src/main/java/waymoreitems/core'), file('src/main/java/waymoreitems/api')]
+    def dossiers = [file('src/main'), file('src/api'), file('src/test')]
+    def dossiersNoyau = [file('src/main/java/waymoreitems/core'), file('src/api/java')]
     def interdits = providers.gradleProperty('wmiForbiddenRefs').getOrElse('')
             .split(',').collect { it.trim().toLowerCase() }.findAll { !it.isEmpty() }
     inputs.files(dossiers)
@@ -133,3 +148,44 @@ tasks.register('verifierCloisonnement') {
     }
 }
 tasks.named('compileJava') { dependsOn 'verifierCloisonnement' }
+
+// Jar du mod : classes de l'API comprises. Jar « -api » : l'API seule, que les autres mods compilent en compileOnly
+// (jamais embarquée chez eux), avec ses sources et sa version propre (api_version, versions strictes).
+tasks.named('jar', Jar) {
+    from sourceSets.api.output
+}
+tasks.register('apiJar', Jar) {
+    group = 'build'
+    description = 'Jar de l API publique de WMI (interfaces et types, sans implementation).'
+    archiveBaseName = "${mod_id}-api"
+    archiveVersion = api_version
+    from sourceSets.api.output
+    from(file('LICENSE')) { into 'META-INF' }
+    manifest {
+        attributes('Specification-Title': 'Way More Items API', 'Specification-Version': api_version,
+                'Implementation-Version': api_version)
+    }
+}
+tasks.register('apiSourcesJar', Jar) {
+    group = 'build'
+    archiveBaseName = "${mod_id}-api"
+    archiveVersion = api_version
+    archiveClassifier = 'sources'
+    from sourceSets.api.allJava
+    from(file('LICENSE')) { into 'META-INF' }
+}
+tasks.named('assemble') { dependsOn 'apiJar', 'apiSourcesJar' }
+// La version de l'API inscrite dans gradle.properties doit être celle du code (WmiApi.VERSION)
+tasks.register('verifierVersionApi') {
+    def source = file('src/api/java/waymoreitems/api/WmiApi.java')
+    def attendue = project.property('api_version').toString()
+    inputs.file(source)
+    inputs.property('apiVersion', attendue)
+    doLast {
+        def m = (source.getText('UTF-8') =~ /VERSION\s*=\s*"([^"]+)"/)
+        if (!m.find() || m.group(1) != attendue) {
+            throw new GradleException('api_version (' + attendue + ') differe de WmiApi.VERSION')
+        }
+    }
+}
+tasks.named('compileApiJava') { dependsOn 'verifierCloisonnement', 'verifierVersionApi' }

@@ -10,7 +10,7 @@ import java.util.Objects;
  *
  * <p>Conçu pour offrir aux développeurs de mods la façon la plus simple possible d'afficher leurs propres machines,
  * soit par code Java en quelques lignes via {@link Builder}, soit par un simple fichier JSON sans aucune ligne de Java
- * ({@code assets/<modid>/wmi_layouts/<recipe_type_path>.json}).</p>
+ * ({@code assets/<modid>/wmi_layouts/<recipe_type_path>.json}, format {@code wmi_recipe_layout}).</p>
  *
  * @param recipeTypeId   identifiant complet du type de recette (ex. {@code "exemplemod:grinding"})
  * @param titleKey       clé de traduction ou titre de l'onglet (ex. {@code "container.exemplemod.grinder"})
@@ -23,6 +23,7 @@ import java.util.Objects;
  * @param showFlame      vrai s'il faut afficher l'indicateur de combustion aux coordonnées {@code (flameX, flameY)}
  * @param flameX         abscisse de la flamme (si {@code showFlame})
  * @param flameY         ordonnée de la flamme (si {@code showFlame})
+ * @param gauges         jauges dessinées sur le plan (énergie, fluide)
  */
 public record RecipeLayoutSpec(
         String recipeTypeId,
@@ -35,7 +36,8 @@ public record RecipeLayoutSpec(
         boolean showEnergyBar,
         boolean showFlame,
         int flameX,
-        int flameY
+        int flameY,
+        List<Gauge> gauges
 ) {
     public enum SlotRole {
         INPUT,
@@ -67,15 +69,41 @@ public record RecipeLayoutSpec(
     public record ProgressArrow(int x, int y, int width, int height) {
     }
 
+    /** Genre d'une jauge. */
+    public enum GaugeKind {
+        /** Énergie de la recette (remplie d'après l'énergie par tick), avec les cotes en infobulle. */
+        ENERGY,
+        /** Réservoir : fluide de l'entrée ou du produit désigné par {@code role} et {@code index}. */
+        FLUID
+    }
+
+    /**
+     * Jauge verticale.
+     *
+     * @param kind   genre de la jauge
+     * @param role   pour {@link GaugeKind#FLUID} : {@link SlotRole#INPUT} ou {@link SlotRole#OUTPUT} (ignoré sinon)
+     * @param index  pour {@link GaugeKind#FLUID} : indice de l'entrée ou du produit
+     */
+    public record Gauge(GaugeKind kind, SlotRole role, int index, int x, int y, int width, int height) {
+        public Gauge {
+            Objects.requireNonNull(kind, "kind");
+            role = role == null ? SlotRole.INPUT : role;
+            if (index < 0 || width < 1 || height < 1) {
+                throw new IllegalArgumentException("invalid gauge: " + kind + " " + index + " " + width + "x" + height);
+            }
+        }
+    }
+
     public RecipeLayoutSpec {
         Objects.requireNonNull(recipeTypeId, "recipeTypeId");
         Objects.requireNonNull(titleKey, "titleKey");
         if (width < 32 || height < 24) {
-            throw new IllegalArgumentException("Dimensions trop petites : " + width + "x" + height);
+            throw new IllegalArgumentException("layout too small: " + width + "x" + height);
         }
         workstations = workstations == null ? List.of() : List.copyOf(workstations);
         slots = slots == null ? List.of() : List.copyOf(slots);
         arrows = arrows == null ? List.of() : List.copyOf(arrows);
+        gauges = gauges == null ? List.of() : List.copyOf(gauges);
     }
 
     public static Builder builder(String recipeTypeId, String titleKey) {
@@ -90,6 +118,7 @@ public record RecipeLayoutSpec(
         private final List<String> workstations = new ArrayList<>();
         private final List<SlotPos> slots = new ArrayList<>();
         private final List<ProgressArrow> arrows = new ArrayList<>();
+        private final List<Gauge> gauges = new ArrayList<>();
         private boolean showEnergyBar;
         private boolean showFlame;
         private int flameX;
@@ -131,6 +160,25 @@ public record RecipeLayoutSpec(
             return this;
         }
 
+        /** Flèche de taille libre. */
+        public Builder arrow(int x, int y, int width, int height) {
+            this.arrows.add(new ProgressArrow(x, y, width, height));
+            return this;
+        }
+
+        /** Jauge d'énergie (implique {@link #energyBar(boolean) energyBar(true)}). */
+        public Builder energyGauge(int x, int y, int width, int height) {
+            this.gauges.add(new Gauge(GaugeKind.ENERGY, null, 0, x, y, width, height));
+            this.showEnergyBar = true;
+            return this;
+        }
+
+        /** Réservoir montrant le fluide de l'entrée ({@code INPUT}) ou du produit ({@code OUTPUT}) d'indice {@code index}. */
+        public Builder fluidGauge(SlotRole role, int index, int x, int y, int width, int height) {
+            this.gauges.add(new Gauge(GaugeKind.FLUID, role, index, x, y, width, height));
+            return this;
+        }
+
         public Builder energyBar(boolean show) {
             this.showEnergyBar = show;
             return this;
@@ -155,7 +203,8 @@ public record RecipeLayoutSpec(
                     showEnergyBar,
                     showFlame,
                     flameX,
-                    flameY
+                    flameY,
+                    gauges
             );
         }
     }

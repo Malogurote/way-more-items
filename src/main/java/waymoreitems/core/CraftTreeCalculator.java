@@ -286,6 +286,9 @@ public final class CraftTreeCalculator {
             if (causesImmediateCycle(r, ancestors)) {
                 continue;
             }
+            if (WmiRegistry.isExcludedFromCraftTree(r.typeId())) {
+                continue;
+            }
             if (isUnpackingRecipe(ctx.index, r, itemId) && !hasInputInStock(ctx, r)) {
                 continue;
             }

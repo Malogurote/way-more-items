@@ -331,6 +331,7 @@
   "wmi.recipe.tree_added": "Arbre ajouté aux Notes",
   "wmi.recipe.place_in_grid": "Placer dans la grille",
   "wmi.recipe.place_in_grid_tip": "Pose les ingrédients de votre inventaire dans la grille ouverte",
+  "wmi.recipe.information": "Informations",
   "wmi.recipe.added_none": "Aucun ingrédient",
   "wmi.recipe.added": "%s objet ajouté aux Notes",
   "wmi.recipe.added.many": "%s objets ajoutés aux Notes",

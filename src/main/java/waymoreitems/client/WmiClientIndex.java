@@ -34,7 +34,7 @@ import net.minecraft.world.item.crafting.display.SmithingRecipeDisplay;
 import net.minecraft.world.item.crafting.display.StonecutterRecipeDisplay;
 import net.minecraft.world.level.block.EntityBlock;
 import waymoreitems.api.RecipeLayoutSpec;
-import waymoreitems.api.WmiRegistry;
+import waymoreitems.core.WmiRegistry;
 import waymoreitems.core.CatalogItem;
 import waymoreitems.core.RecipeEntry;
 import waymoreitems.core.RecipeIndex;
@@ -196,6 +196,10 @@ public final class WmiClientIndex {
         ContextMap context = (mc != null && mc.level != null) ? SlotDisplayContext.fromLevel(mc.level) : ContextMap.EMPTY;
         boolean tagsBound = BuiltInRegistries.ITEM.getTags().findAny().isPresent();
 
+        // Extensions des autres mods et mises en page JSON, lues avant la conversion des recettes
+        WmiExtensions.loadOnce();
+        WmiExtensions.reloadJsonLayouts(mc == null ? null : mc.getResourceManager());
+
         List<CatalogItem> catalog = buildCatalog(mc);
         List<RecipeEntry> entries = new ArrayList<>();
 
@@ -240,15 +244,8 @@ public final class WmiClientIndex {
             com.mojang.logging.LogUtils.getLogger().info(report.toString());
         }
 
-        for (WmiRegistry.CustomRecipeExtractor ext : WmiRegistry.extractors()) {
-            try {
-                List<RecipeEntry> custom = ext.extractRecipes();
-                if (custom != null) {
-                    entries.addAll(custom);
-                }
-            } catch (Exception ignored) {
-            }
-        }
+        // Recettes et fiches des extensions des autres mods (API publique)
+        entries.addAll(WmiExtensions.collectRecipes(t -> resolveCategoryName(t, WmiRegistry.layout(t))));
 
         currentIndex = new RecipeIndex(catalog, entries);
         currentCreativeTabs = buildCreativeTabs(mc);

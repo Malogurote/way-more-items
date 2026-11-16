@@ -331,6 +331,7 @@
   "wmi.recipe.tree_added": "Árbol añadido a las notas",
   "wmi.recipe.place_in_grid": "Colocar en la cuadrícula",
   "wmi.recipe.place_in_grid_tip": "Coloca los ingredientes de tu inventario en la cuadrícula abierta",
+  "wmi.recipe.information": "Información",
   "wmi.recipe.added_none": "Ningún ingrediente",
   "wmi.recipe.added": "%s objeto añadido a las notas",
   "wmi.recipe.added.many": "%s objetos añadidos a las notas",
