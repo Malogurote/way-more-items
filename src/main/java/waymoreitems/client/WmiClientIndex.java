@@ -264,6 +264,7 @@ public final class WmiClientIndex {
         private final Map<String, ItemStack> stacks = new HashMap<>();
         private final List<RecipeEntry> entries = new ArrayList<>();
         private int recipesRead;
+        private final Set<String> knownIds = new HashSet<>();
         // Couverture : chaque recette reçue, lue ou non (rapport de /wmi coverage) ; null si aucune recette reçue
         private final @Nullable List<CoverageReport.Sample> samples;
         private @Nullable CompletableFuture<RecipeIndex> indexing;
@@ -351,7 +352,6 @@ public final class WmiClientIndex {
                     }
                 }
                 // Source externe (navigateur de recettes installé à côté) : seulement les recettes que WMI n'a pas lues
-                Set<String> knownIds = new HashSet<>();
                 for (RecipeEntry e : entries) {
                     knownIds.add(e.id());
                 }
@@ -404,6 +404,8 @@ public final class WmiClientIndex {
             long t = System.nanoTime();
             currentIndex = index;
             stackById = stacks;
+            // Lignes de texte des fiches dédiées : seules restent celles des recettes de ce nouvel index
+            WmiDedicatedRecipes.retainOnly(knownIds);
             coverageSamples = samples == null ? null : List.copyOf(samples);
             currentCreativeTabs = buildCreativeTabs(mc);
             phaseNanos[DONE] = System.nanoTime() - t;
@@ -446,7 +448,7 @@ public final class WmiClientIndex {
             boolean read = false;
             try {
                 RecipeEntry entry = convertHolder(holder, context);
-                if (entry != null && !entry.outputs().isEmpty()) {
+                if (entry != null && (!entry.outputs().isEmpty() || WmiDedicatedRecipes.isInfo(entry))) {
                     entries.add(entry);
                     read = true;
                 }
@@ -545,6 +547,11 @@ public final class WmiClientIndex {
     }
 
     private static RecipeEntry convertHolder(RecipeHolder<?> holder, ContextMap context) {
+        // 0. Lecture dédiée (procédés en monde, démontages, recettes calculées à la volée), par les données de la recette
+        RecipeEntry dedicated = WmiDedicatedRecipes.convert(holder);
+        if (dedicated != null) {
+            return dedicated;
+        }
         String recipeId = holder.id().identifier().toString();
         Recipe<?> recipe = holder.value();
         RecipeType<?> type = recipe.getType();

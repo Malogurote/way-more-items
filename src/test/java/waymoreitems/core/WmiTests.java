@@ -882,6 +882,7 @@ public final class WmiTests {
         LangTests.run(WmiTests::check);
         ImportedLayoutTests.run(WmiTests::check);
         FluidTests.run(WmiTests::check);
+        DedicatedRecipeTests.run(WmiTests::check);
 
         System.out.println("WmiTests : " + checks + " verifications, " + failures + " echec(s).");
         if (failures > 0) {

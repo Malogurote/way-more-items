@@ -428,7 +428,15 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
                 String chosen = ing.alternatives().get((int) (tick % ing.alternatives().size()));
                 drawFloatingSlot(g, ix + (i % 3) * 19, iy + (i / 3) * 19, chosen, ing.count(), false, mouseX, mouseY);
             }
-            drawAnimatedArrow(g, cx + 70, cy + 22, 24);
+            if (!rec.outputs().isEmpty()) {
+                drawAnimatedArrow(g, cx + 70, cy + 22, 24);
+            }
+            // Catalyseurs (outils, fluide, explosif) sous la flèche, non consommés
+            for (int i = 0; i < rec.catalysts().size() && i < 3; i++) {
+                RecipeEntry.IngredientSlot cat = rec.catalysts().get(i);
+                String chosen = cat.alternatives().get((int) (tick % cat.alternatives().size()));
+                drawFloatingSlot(g, cx + 70 + i * 19, cy + 40, chosen, cat.count(), false, mouseX, mouseY);
+            }
             for (int i = 0; i < rec.outputs().size(); i++) {
                 RecipeEntry.ItemAmount out = rec.outputs().get(i);
                 drawFloatingSlot(g, cx + 104 + i * 22, cy + 20, out.itemId(), out.count(), true, mouseX, mouseY);
@@ -449,6 +457,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         if (rec.totalEnergy() > 0) {
             WmiDraw.drawText(g, font, rec.totalEnergy() + " EU", metaX, metaY, th.textMuted);
         }
+        drawRecipeNotes(g, rec, cx, cy, cw, ch, metaX, metaY + (rec.totalEnergy() > 0 ? 10 : 0));
 
         // Bouton « + » : arbre de fabrication de la recette ajouté aux Notes (vert si tout est déjà en inventaire)
         boolean canExec = WmiClientIndex.get().canExecuteSingleRecipe(rec, playerInventory);
@@ -483,6 +492,39 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             String msg = pinnedFeedbackText;
             int mw = WmiVector.width(font, msg);
             WmiDraw.drawText(g, font, msg, leftOfPlus - mw, btnY + 3, th.green);
+        }
+    }
+
+    /**
+     * Lignes de texte des recettes lues par {@link WmiDedicatedRecipes} (procédé, fiche d'information), coupées à la
+     * largeur libre de la carte : à droite des produits, ou dès la flèche quand la recette n'en a pas.
+     */
+    private void drawRecipeNotes(GuiGraphicsExtractor g, RecipeEntry rec, int cx, int cy, int cw, int ch, int metaX, int metaY) {
+        List<String> notes = WmiDedicatedRecipes.notes(rec.id());
+        if (notes.isEmpty()) {
+            return;
+        }
+        int x = rec.outputs().isEmpty() ? cx + 70 : Math.max(metaX, cx + 104 + rec.outputs().size() * 22 + 6);
+        // Pleine largeur au-dessus de la rangée du bouton « + », raccourcie à sa hauteur
+        int buttonRowY = cy + ch - 19;
+        int bottom = cy + ch - 10;
+        int y = metaY;
+        WmiTheme th = theme();
+        for (String note : notes) {
+            String[] words = note.split(" ");
+            int w = 0;
+            while (w < words.length) {
+                if (y > bottom) {
+                    return;
+                }
+                int maxW = (y + 8 >= buttonRowY ? cx + cw - 22 : cx + cw - 6) - x;
+                StringBuilder line = new StringBuilder(words[w++]);
+                while (w < words.length && WmiVector.width(font, line + " " + words[w]) <= maxW) {
+                    line.append(' ').append(words[w++]);
+                }
+                WmiDraw.drawText(g, font, line.toString(), x, y, th.textMuted);
+                y += 10;
+            }
         }
     }
 
