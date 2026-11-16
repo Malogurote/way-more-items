@@ -134,6 +134,26 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         refreshData();
     }
 
+    /**
+     * Met le procédé {@code typeId} en tête des onglets et l'ouvre (clic sur la flèche d'une machine). Sans effet s'il
+     * n'est pas dans la liste affichée.
+     */
+    public void focusType(String typeId) {
+        if (typeId == null || !availableTypes.contains(typeId)) {
+            return;
+        }
+        List<String> ordered = new ArrayList<>(availableTypes.size());
+        ordered.add(typeId);
+        for (String t : availableTypes) {
+            if (!t.equals(typeId)) {
+                ordered.add(t);
+            }
+        }
+        this.availableTypes = List.copyOf(ordered);
+        this.currentTab = 0;
+        this.currentPage = 0;
+    }
+
     private boolean goBack() {
         if (history.isEmpty()) {
             onClose();

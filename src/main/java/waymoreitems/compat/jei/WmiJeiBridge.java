@@ -78,6 +78,7 @@ final class WmiJeiBridge implements WmiExternalSources.Bridge {
         final Map<String, Integer> failedByCategory = new TreeMap<>();
         /** Recettes masquées dans JEI (par un mod ou par le joueur), non importées : comptées par mod. */
         final Map<String, Integer> hiddenByMod = new TreeMap<>();
+        final Set<String> describedCategories = new java.util.HashSet<>();
         int alreadyRead;
         int noItemOutput;
         int failed;
@@ -262,11 +263,10 @@ final class WmiJeiBridge implements WmiExternalSources.Bridge {
                     }
                 }
             }
-            if (view instanceof IRecipeSlotDrawable d) {
-                Rect2i r = d.getAreaIncludingBackground();
-                // Case sans fond (16 x 16) : ramenée au coin de la case de 18 qu'elle occuperait
-                int pad = r.getWidth() < ImportedRecipeLayout.SLOT ? (ImportedRecipeLayout.SLOT - r.getWidth()) / 2 : 0;
-                slots.add(new ImportedRecipeLayout.Slot(wmiRole, r.getX() - pad, r.getY() - pad, ingredient));
+            int[] pos = view instanceof IRecipeSlotDrawable d
+                    ? locate(d, category.getWidth(), category.getHeight()) : null;
+            if (pos != null) {
+                slots.add(new ImportedRecipeLayout.Slot(wmiRole, pos[0], pos[1], ingredient));
             } else {
                 positioned = false;
             }
@@ -277,14 +277,51 @@ final class WmiJeiBridge implements WmiExternalSources.Bridge {
         List<Integer> cells = positioned ? ImportedRecipeLayout.gridCells(slots, inputs.size()) : List.of();
         RecipeEntry entry = new RecipeEntry(recipeId, typeId, title, workstations, inputs, catalysts, outputs,
                 0, 0, 0, cells);
-        if (positioned) {
-            RecipeLayoutSpec spec = cache.get(typeId, title, slots, cells);
-            if (spec != null) {
-                layouts.put(recipeId, spec);
-                stats.layouts++;
-            }
+        RecipeLayoutSpec spec = positioned ? cache.get(typeId, title, slots, cells) : null;
+        if (spec != null) {
+            layouts.put(recipeId, spec);
+            stats.layouts++;
+        }
+        if (stats.describedCategories.add(typeId)) {
+            // Une ligne par catégorie importée : cases relevées dans JEI, pour vérifier la disposition reprise
+            LOGGER.info("WMI: JEI category {} ({}x{}): inputs {}, outputs {}, slots {}, grid {}, layout {}", typeId,
+                    category.getWidth(), category.getHeight(), inputs.size(), outputs.size(), slots, cells,
+                    spec == null ? "generic" : "kept");
         }
         return entry;
+    }
+
+    /**
+     * Coin de la case de 18 qu'occupe une case de JEI dans le plan de sa catégorie, ou {@code null}. JEI ne donne pas
+     * sa position (sa zone « avec fond » reste à l'origine) ; elle se lit par sa zone sensible ({@code isMouseOver},
+     * en coordonnées de la recette), sondée au pas de 2 puis affinée au pixel. Zone de 16 : case sans son fond.
+     */
+    private static int[] locate(IRecipeSlotDrawable slot, int width, int height) {
+        int maxX = Math.max(18, width) + 4;
+        int maxY = Math.max(18, height) + 4;
+        for (int y = -4; y < maxY; y += 2) {
+            for (int x = -4; x < maxX; x += 2) {
+                if (!slot.isMouseOver(x + 0.5, y + 0.5)) {
+                    continue;
+                }
+                int left = x;
+                while (left > x - 2 && slot.isMouseOver(left - 0.5, y + 0.5)) {
+                    left--;
+                }
+                int top = y;
+                while (top > y - 18 && slot.isMouseOver(left + 0.5, top - 0.5)) {
+                    top--;
+                }
+                int right = left;
+                while (right < left + 40 && slot.isMouseOver(right + 1.5, top + 0.5)) {
+                    right++;
+                }
+                int w = right - left + 1;
+                int pad = w < ImportedRecipeLayout.SLOT ? (ImportedRecipeLayout.SLOT - w) / 2 : 0;
+                return new int[] {left - pad, top - pad};
+            }
+        }
+        return null;
     }
 
     /** Identifiant de la recette : celui de Minecraft si JEI présente une recette du jeu, sinon celui de la catégorie. */
@@ -338,7 +375,9 @@ final class WmiJeiBridge implements WmiExternalSources.Bridge {
             return false;
         }
         try {
-            Optional<IGuiClickableArea> area = rt.getScreenHelper().getGuiClickableArea(screen, mouseX, mouseY).findFirst();
+            // Coordonnées relatives au coin de l'inventaire, comme JEI les passe lui-même
+            Optional<IGuiClickableArea> area = rt.getScreenHelper()
+                    .getGuiClickableArea(screen, mouseX - screen.getLeftPos(), mouseY - screen.getTopPos()).findFirst();
             if (area.isEmpty()) {
                 return false;
             }
@@ -346,15 +385,15 @@ final class WmiJeiBridge implements WmiExternalSources.Bridge {
             area.get().onClick(rt.getJeiHelpers().getFocusFactory(), request);
             return request.opened;
         } catch (Throwable t) {
-            LOGGER.debug("WMI: JEI clickable area failed", t);
+            LOGGER.warn("WMI: JEI clickable area failed", t);
             return false;
         }
     }
 
     /**
      * Demande d'affichage que la zone cliquable adresse à JEI, redirigée vers les fenêtres de WMI : un objet ouvre ses
-     * recettes ou ses usages ; une catégorie ouvre les usages de son premier catalyseur (la machine), qui regroupent
-     * les recettes de la catégorie.
+     * recettes ou ses usages ; une catégorie ouvre les usages de son premier catalyseur (la machine), sur l'onglet de
+     * la catégorie.
      */
     private static final class ViewRequest implements IRecipesGui {
         private final IJeiRuntime rt;
@@ -385,7 +424,9 @@ final class WmiJeiBridge implements WmiExternalSources.Bridge {
                 Optional<ItemStack> station = rt.getRecipeManager().createCraftingStationLookup(type).getItemStack().findFirst();
                 String id = station.map(WmiJeiBridge::itemId).orElse(null);
                 if (id != null) {
-                    open(WmiRecipeScreen.ViewMode.USES, id);
+                    opened = true;
+                    WmiClient.overlay().openWorkstation(Minecraft.getInstance().gui.screen(), id,
+                            type.getUid().toString());
                     return;
                 }
             }

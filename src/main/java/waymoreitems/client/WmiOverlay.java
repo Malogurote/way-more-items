@@ -238,6 +238,14 @@ public final class WmiOverlay {
         Minecraft.getInstance().gui.setScreen(new WmiRecipeScreen(parent, mode, itemId, checklist, snapshotPlayerInventory()));
     }
 
+    /** Usages d'une machine, ouverts sur l'onglet du procédé {@code typeId} (zone cliquable d'un écran de machine). */
+    public void openWorkstation(Screen parent, String stationItemId, String typeId) {
+        WmiRecipeScreen screen = new WmiRecipeScreen(parent, WmiRecipeScreen.ViewMode.USES, stationItemId, checklist,
+                snapshotPlayerInventory());
+        screen.focusType(typeId);
+        Minecraft.getInstance().gui.setScreen(screen);
+    }
+
     public void tickClient() {
         Minecraft mc = Minecraft.getInstance();
         // Noms d'objets en anglais pour tout le jeu (option) : recouvrir la table de traduction après chaque rechargement

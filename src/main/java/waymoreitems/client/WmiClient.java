@@ -79,8 +79,10 @@ public final class WmiClient {
         NeoForge.EVENT_BUS.addListener(WmiClient::onScreenRenderPost);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, WmiClient::onGuiLayerPre);
         NeoForge.EVENT_BUS.addListener(WmiClient::onGuiLayerPost);
-        NeoForge.EVENT_BUS.addListener(WmiClient::onScreenMouseClickedPre);
-        NeoForge.EVENT_BUS.addListener(WmiClient::onScreenMouseReleasedPre);
+        // Priorité haute aussi pour les clics : JEI les écoute à la priorité normale et ouvrirait sa propre fenêtre
+        // sur la flèche d'une machine avant que WMI ne réponde
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGH, WmiClient::onScreenMouseClickedPre);
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGH, WmiClient::onScreenMouseReleasedPre);
         NeoForge.EVENT_BUS.addListener(WmiClient::onScreenMouseScrolledPre);
         // Priorité haute : en mode WMI, WMI répond aux touches avant JEI et annule l'événement
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGH, WmiClient::onScreenKeyPressedPre);
