@@ -165,14 +165,30 @@ final class WmiFluids {
      * la clé ne désigne pas un fluide connu.
      */
     static boolean draw(GuiGraphicsExtractor g, @Nullable String key, int x, int y, int size) {
+        return drawArea(g, key, x, y, size, size);
+    }
+
+    /**
+     * Remplit un rectangle de {@code w} sur {@code h} unités de la texture immobile du fluide de {@code key} (jauge de
+     * recette), par carreaux carrés du petit côté ; le dernier carreau de chaque rangée et colonne est ajusté au reste.
+     * Rend {@code false} si la clé ne désigne pas un fluide connu.
+     */
+    static boolean drawArea(GuiGraphicsExtractor g, @Nullable String key, int x, int y, int w, int h) {
         Fluid f = fluid(key);
-        if (f == null || size <= 0) {
+        if (f == null || w <= 0 || h <= 0) {
             return false;
         }
         try {
             FluidModel model = Minecraft.getInstance().getModelManager().getFluidStateModelSet().get(f.defaultFluidState());
             TextureAtlasSprite sprite = model.stillMaterial().sprite();
-            g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, size, size, tint(f, model));
+            int color = tint(f, model);
+            int tile = Math.min(w, h);
+            for (int ty = 0; ty < h; ty += tile) {
+                for (int tx = 0; tx < w; tx += tile) {
+                    g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x + tx, y + ty, Math.min(tile, w - tx),
+                            Math.min(tile, h - ty), color);
+                }
+            }
         } catch (Exception e) {
             LOGGER.debug("Could not draw a fluid", e);
             return false;

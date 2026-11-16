@@ -22,6 +22,7 @@ import waymoreitems.core.CatalogItem;
 import waymoreitems.core.CommandPalette;
 import waymoreitems.core.CraftPlanCache;
 import waymoreitems.core.CraftTreeCalculator;
+import waymoreitems.core.IngredientRef;
 import waymoreitems.core.PinnedChecklist;
 import waymoreitems.core.RecipeEntry;
 import waymoreitems.core.RecipeIndex;
@@ -628,6 +629,10 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             }
             fill = h - 2;
             color = th.accentSoft;
+        }
+        // Jauge d'un fluide : sa texture ; autre genre d'ingrédient (ou fluide sans texture) : barre de couleur
+        if (key != null && IngredientRef.isFluid(key) && WmiFluids.drawArea(g, key, x + 1, y + 1, w - 2, h - 2)) {
+            fill = 0;
         }
         if (fill > 0) {
             WmiDraw.bar(g, x + 1, y + h - 1 - fill, x + w - 1, y + h - 1, color);
