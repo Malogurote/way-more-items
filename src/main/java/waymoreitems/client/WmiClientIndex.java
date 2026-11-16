@@ -39,10 +39,13 @@ import waymoreitems.core.CatalogItem;
 import waymoreitems.core.RecipeEntry;
 import waymoreitems.core.RecipeIndex;
 
+import org.jspecify.annotations.Nullable;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -50,6 +53,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Extracteur universel des objets et des recettes côté client (Minecraft 26.3, NeoForge).
@@ -68,13 +74,25 @@ public final class WmiClientIndex {
     /** Table de traduction de Minecraft en vigueur lors de la dernière construction de l'index. */
     private static volatile net.minecraft.locale.Language builtWithLanguage;
     private static int ticksWaitingForTags = 0;
-    private static final Map<String, ItemStack> STACK_BY_ID = new LinkedHashMap<>();
+    /** Piles d'affichage par identifiant ; table remplacée d'un bloc à chaque publication d'un index (fil de rendu seul). */
+    private static Map<String, ItemStack> stackById = new HashMap<>();
+    /** Construction en cours, étalée sur plusieurs ticks ({@code null} si aucune). */
+    private static @Nullable IndexBuild build;
+    /** Temps de construction par tick quand un index est déjà affiché (le jeu reste fluide pendant la reconstruction). */
+    private static final long TICK_BUDGET_NANOS = 6_000_000L;
+    /** Temps par tick pour la première construction, quand le catalogue est encore vide. */
+    private static final long FIRST_BUILD_BUDGET_NANOS = 30_000_000L;
+    private static final ExecutorService INDEX_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "WMI index");
+        t.setDaemon(true);
+        return t;
+    });
 
     private WmiClientIndex() {
     }
 
     public static List<CreativeTabEntry> creativeTabs() {
-        if (currentCreativeTabs.isEmpty()) {
+        if (currentCreativeTabs.isEmpty() && build == null) {
             Minecraft mc = Minecraft.getInstance();
             if (mc != null && mc.level != null) {
                 rebuildNow();
@@ -83,8 +101,12 @@ public final class WmiClientIndex {
         return currentCreativeTabs;
     }
 
+    /**
+     * Index courant. S'il est vide et qu'aucune construction n'est en cours, il est construit d'un bloc ; pendant une
+     * construction étalée, l'index précédent reste servi jusqu'à son remplacement.
+     */
     public static RecipeIndex get() {
-        if (currentIndex.allItems().isEmpty()) {
+        if (currentIndex.allItems().isEmpty() && build == null) {
             Minecraft mc = Minecraft.getInstance();
             if (mc != null && mc.level != null) {
                 rebuildNow();
@@ -128,7 +150,8 @@ public final class WmiClientIndex {
         builtWithBoundTags = false;
         builtWithLanguage = null;
         ticksWaitingForTags = 0;
-        STACK_BY_ID.clear();
+        build = null;
+        stackById = new HashMap<>();
     }
 
     public static void tickClient() {
@@ -147,11 +170,13 @@ public final class WmiClientIndex {
             needsRebuild = true;
             ticksWaitingForTags = 15;
         }
-        if (!needsRebuild && !currentIndex.allItems().isEmpty()) {
-            return;
+        if (needsRebuild && (tagsBound || ++ticksWaitingForTags >= 15)) {
+            // Une construction en cours est abandonnée : ses recettes, ses tags ou sa langue sont dépassés
+            build = new IndexBuild(mc);
         }
-        if (tagsBound || ++ticksWaitingForTags >= 15) {
-            rebuildNow();
+        IndexBuild b = build;
+        if (b != null) {
+            b.step(currentIndex.allItems().isEmpty() ? FIRST_BUILD_BUDGET_NANOS : TICK_BUDGET_NANOS, true);
         }
     }
 
@@ -159,7 +184,8 @@ public final class WmiClientIndex {
         if (itemId == null || itemId.isEmpty()) {
             return ItemStack.EMPTY;
         }
-        ItemStack cached = STACK_BY_ID.get(itemId);
+        Map<String, ItemStack> stacks = stackById;
+        ItemStack cached = stacks.get(itemId);
         if (cached != null) {
             return cached;
         }
@@ -167,7 +193,7 @@ public final class WmiClientIndex {
             Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
             if (item != null && item != Items.AIR) {
                 ItemStack s = new ItemStack(item);
-                STACK_BY_ID.put(itemId, s);
+                stacks.put(itemId, s);
                 return s;
             }
         } catch (Exception ignored) {
@@ -190,80 +216,252 @@ public final class WmiClientIndex {
         }
     }
 
+    /** Reconstruit l'index d'un bloc, sur-le-champ (commande de mesure, premier accès à un index vide). */
     public static synchronized void rebuildNow() {
-        Minecraft mc = Minecraft.getInstance();
-        builtWithLanguage = net.minecraft.locale.Language.getInstance();
-        ContextMap context = (mc != null && mc.level != null) ? SlotDisplayContext.fromLevel(mc.level) : ContextMap.EMPTY;
-        boolean tagsBound = BuiltInRegistries.ITEM.getTags().findAny().isPresent();
+        IndexBuild b = new IndexBuild(Minecraft.getInstance());
+        build = b;
+        b.step(Long.MAX_VALUE, false);
+    }
 
-        long t0 = WmiPerf.start();
-        List<CatalogItem> catalog = buildCatalog(mc);
-        long t1 = WmiPerf.start();
-        List<RecipeEntry> entries = new ArrayList<>();
+    /** Vrai pendant la lecture des infobulles par l'index : les ajouts de WMI aux infobulles s'abstiennent. */
+    static volatile boolean collectingTooltips = false;
 
-        RecipeMap map = pendingRecipeMap;
+    /**
+     * Construction de l'index, découpée pour ne pas figer le jeu sur un gros pack. Lecture des objets (infobulles
+     * comprises), des recettes et des extracteurs sur le fil de rendu, par tranches de temps à chaque tick (les
+     * objets de Minecraft ne se lisent pas depuis un autre fil) ; indexation des données recueillies
+     * ({@link RecipeIndex}, Java pur, sans lien avec le jeu) sur un fil d'arrière-plan ; publication de l'index, des
+     * onglets créatifs et des piles d'un bloc, sur le fil de rendu. Une construction remplacée entre-temps
+     * ({@link #build}) n'est jamais publiée.
+     */
+    private static final class IndexBuild {
+        private static final int ITEMS = 0;
+        private static final int RECIPES = 1;
+        private static final int EXTRACTORS = 2;
+        private static final int INDEXING = 3;
+        private static final int DONE = 4;
+
+        private final Minecraft mc;
+        private final ContextMap context;
+        private final Item.TooltipContext tooltipCtx;
+        private final Map<String, String> modNames = new LinkedHashMap<>();
+        private final List<Holder.Reference<Item>> itemRefs;
+        private final List<RecipeHolder<?>> holders;
+        private int itemPos;
+        private int recipePos;
+        private int phase = ITEMS;
+
+        private final List<CatalogItem> catalog = new ArrayList<>();
+        private final Map<String, ItemStack> stacks = new HashMap<>();
+        private final List<RecipeEntry> entries = new ArrayList<>();
+        private int recipesRead;
         // Mesure de couverture par mod : recettes reçues, recettes lues, types de recettes
-        java.util.Map<String, int[]> coverage = new java.util.TreeMap<>();
-        java.util.Map<String, java.util.Set<String>> typesByMod = new java.util.TreeMap<>();
-        java.util.Map<String, java.util.Map<String, Integer>> unreadTypes = new java.util.TreeMap<>();
-        if (map != null) {
-            for (RecipeHolder<?> holder : map.values()) {
-                String ns = holder.id().identifier().getNamespace();
-                int[] c = coverage.computeIfAbsent(ns, k -> new int[2]);
-                c[0]++;
-                int readBefore = c[1];
+        private final Map<String, int[]> coverage = new java.util.TreeMap<>();
+        private final Map<String, Set<String>> typesByMod = new java.util.TreeMap<>();
+        private final Map<String, Map<String, Integer>> unreadTypes = new java.util.TreeMap<>();
+        private @Nullable CompletableFuture<RecipeIndex> indexing;
+
+        /** Temps passé dans chaque phase (objets, recettes, extracteurs, indexation, publication), en nanosecondes. */
+        private final long[] phaseNanos = new long[5];
+        private final long startNanos = System.nanoTime();
+        private int steps;
+
+        IndexBuild(Minecraft mc) {
+            this.mc = mc;
+            builtWithLanguage = net.minecraft.locale.Language.getInstance();
+            builtWithBoundTags = BuiltInRegistries.ITEM.getTags().findAny().isPresent();
+            needsRebuild = false;
+            ticksWaitingForTags = 0;
+            boolean hasLevel = mc != null && mc.level != null;
+            this.context = hasLevel ? SlotDisplayContext.fromLevel(mc.level) : ContextMap.EMPTY;
+            this.tooltipCtx = hasLevel ? Item.TooltipContext.of(mc.level) : Item.TooltipContext.EMPTY;
+            modNames.put("minecraft", "Minecraft");
+            WmiPlatform.forEachMod(modNames::put);
+            this.itemRefs = BuiltInRegistries.ITEM.listElements().toList();
+            RecipeMap map = pendingRecipeMap;
+            this.holders = map == null ? List.of() : List.copyOf(map.values());
+        }
+
+        /**
+         * Avance la construction d'environ {@code budgetNanos} au plus (fil de rendu). {@code async} : indexation sur le
+         * fil d'arrière-plan, publiée à un tick suivant ; sinon tout est fait et publié avant de rendre la main.
+         */
+        void step(long budgetNanos, boolean async) {
+            steps++;
+            long begin = System.nanoTime();
+            long deadline = budgetNanos == Long.MAX_VALUE ? Long.MAX_VALUE : begin + budgetNanos;
+            if (phase == ITEMS) {
+                long t = System.nanoTime();
+                collectingTooltips = true;
                 try {
-                    RecipeEntry entry = convertHolder(holder, context);
-                    if (entry != null && !entry.outputs().isEmpty()) {
-                        entries.add(entry);
-                        c[1]++;
-                        typesByMod.computeIfAbsent(ns, k -> new java.util.TreeSet<>()).add(entry.typeId());
+                    while (itemPos < itemRefs.size()) {
+                        readItem(itemRefs.get(itemPos++));
+                        if ((itemPos & 15) == 0 && System.nanoTime() >= deadline) {
+                            break;
+                        }
+                    }
+                } finally {
+                    collectingTooltips = false;
+                }
+                phaseNanos[ITEMS] += System.nanoTime() - t;
+                if (itemPos < itemRefs.size()) {
+                    return;
+                }
+                phase = RECIPES;
+            }
+            if (phase == RECIPES) {
+                long t = System.nanoTime();
+                while (recipePos < holders.size()) {
+                    readRecipe(holders.get(recipePos++));
+                    if ((recipePos & 15) == 0 && System.nanoTime() >= deadline) {
+                        break;
+                    }
+                }
+                phaseNanos[RECIPES] += System.nanoTime() - t;
+                if (recipePos < holders.size()) {
+                    return;
+                }
+                logCoverage();
+                phase = EXTRACTORS;
+            }
+            if (phase == EXTRACTORS) {
+                long t = System.nanoTime();
+                recipesRead = entries.size();
+                for (WmiRegistry.CustomRecipeExtractor ext : WmiRegistry.extractors()) {
+                    try {
+                        List<RecipeEntry> custom = ext.extractRecipes();
+                        if (custom != null) {
+                            entries.addAll(custom);
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+                phaseNanos[EXTRACTORS] += System.nanoTime() - t;
+                phase = INDEXING;
+                if (!async) {
+                    long ti = System.nanoTime();
+                    RecipeIndex index = new RecipeIndex(catalog, entries);
+                    phaseNanos[INDEXING] = System.nanoTime() - ti;
+                    publish(index);
+                    logTimings();
+                    return;
+                }
+                // Les listes passent au fil d'arrière-plan et ne sont plus modifiées ici
+                List<CatalogItem> items = catalog;
+                List<RecipeEntry> recipes = entries;
+                indexing = CompletableFuture.supplyAsync(() -> {
+                    long ti = System.nanoTime();
+                    RecipeIndex index = new RecipeIndex(items, recipes);
+                    phaseNanos[INDEXING] = System.nanoTime() - ti;
+                    return index;
+                }, INDEX_EXECUTOR);
+                return;
+            }
+            if (phase == INDEXING && indexing != null && indexing.isDone()) {
+                RecipeIndex index;
+                try {
+                    index = indexing.join();
+                } catch (RuntimeException e) {
+                    com.mojang.logging.LogUtils.getLogger().error("WMI : échec de l'indexation", e);
+                    phase = DONE;
+                    if (build == this) {
+                        build = null;
+                    }
+                    return;
+                }
+                publish(index);
+                logTimings();
+            }
+        }
+
+        /** Remplace d'un bloc l'index, les piles et les onglets créatifs, si cette construction est toujours la bonne. */
+        private void publish(RecipeIndex index) {
+            phase = DONE;
+            if (build != this) {
+                return;
+            }
+            build = null;
+            long t = System.nanoTime();
+            currentIndex = index;
+            stackById = stacks;
+            currentCreativeTabs = buildCreativeTabs(mc);
+            phaseNanos[DONE] = System.nanoTime() - t;
+        }
+
+        private void readItem(Holder.Reference<Item> ref) {
+            Item item = ref.value();
+            if (item == Items.AIR) {
+                return;
+            }
+            Identifier key = ref.key().identifier();
+            String id = key.toString();
+            String ns = key.getNamespace();
+            String modName = modNames.getOrDefault(ns, ns);
+            ItemStack stack = new ItemStack(item);
+            stacks.put(id, stack);
+            String displayName = WmiNames.of(stack);
+            Set<String> tags = new LinkedHashSet<>();
+            ref.tags().forEach(tagKey -> tags.add(tagKey.location().toString()));
+            String category = classifyItemCategory(item, stack, key.getPath(), tags);
+
+            StringBuilder tipBuilder = new StringBuilder();
+            if (mc != null && mc.player != null) {
+                try {
+                    List<Component> lines = stack.getTooltipLines(tooltipCtx, mc.player, TooltipFlag.Default.NORMAL);
+                    for (int i = 1; i < lines.size(); i++) {
+                        if (tipBuilder.length() > 0) {
+                            tipBuilder.append(' ');
+                        }
+                        tipBuilder.append(lines.get(i).getString());
                     }
                 } catch (Exception ignored) {
                 }
-                if (c[1] == readBefore) {
-                    String type;
-                    try {
-                        type = String.valueOf(BuiltInRegistries.RECIPE_TYPE.getKey(holder.value().getType()));
-                    } catch (Exception e) {
-                        type = "?";
-                    }
-                    unreadTypes.computeIfAbsent(ns, k -> new java.util.TreeMap<>()).merge(type, 1, Integer::sum);
-                }
             }
-        }
-        if (!unreadTypes.isEmpty()) {
-            com.mojang.logging.LogUtils.getLogger().info("WMI : recettes non lues par mod et par type : " + unreadTypes);
-        }
-        if (!coverage.isEmpty()) {
-            StringBuilder report = new StringBuilder("WMI : recettes lues par mod (lues/reçues, types) :");
-            coverage.forEach((ns, c) -> report.append(' ').append(ns).append(' ').append(c[1]).append('/').append(c[0])
-                    .append(" (").append(typesByMod.getOrDefault(ns, java.util.Set.of()).size()).append(") ;"));
-            com.mojang.logging.LogUtils.getLogger().info(report.toString());
+
+            catalog.add(new CatalogItem(id, ns, modName, displayName, category, Math.max(1, stack.getMaxStackSize()), tags, tipBuilder.toString()));
         }
 
-        long t2 = WmiPerf.start();
-        int recipesRead = entries.size();
-        for (WmiRegistry.CustomRecipeExtractor ext : WmiRegistry.extractors()) {
+        private void readRecipe(RecipeHolder<?> holder) {
+            String ns = holder.id().identifier().getNamespace();
+            int[] c = coverage.computeIfAbsent(ns, k -> new int[2]);
+            c[0]++;
+            int readBefore = c[1];
             try {
-                List<RecipeEntry> custom = ext.extractRecipes();
-                if (custom != null) {
-                    entries.addAll(custom);
+                RecipeEntry entry = convertHolder(holder, context);
+                if (entry != null && !entry.outputs().isEmpty()) {
+                    entries.add(entry);
+                    c[1]++;
+                    typesByMod.computeIfAbsent(ns, k -> new java.util.TreeSet<>()).add(entry.typeId());
                 }
             } catch (Exception ignored) {
             }
+            if (c[1] == readBefore) {
+                String type;
+                try {
+                    type = String.valueOf(BuiltInRegistries.RECIPE_TYPE.getKey(holder.value().getType()));
+                } catch (Exception e) {
+                    type = "?";
+                }
+                unreadTypes.computeIfAbsent(ns, k -> new java.util.TreeMap<>()).merge(type, 1, Integer::sum);
+            }
         }
 
-        long t3 = WmiPerf.start();
-        currentIndex = new RecipeIndex(catalog, entries);
-        long t4 = WmiPerf.start();
-        currentCreativeTabs = buildCreativeTabs(mc);
-        builtWithBoundTags = tagsBound;
-        needsRebuild = false;
-        if (t0 != 0L) {
-            long t5 = System.nanoTime();
-            WmiPerf.logRebuild(t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, catalog.size(), recipesRead,
-                    coverage.values().stream().mapToInt(c -> c[0]).sum());
+        private void logCoverage() {
+            if (!unreadTypes.isEmpty()) {
+                com.mojang.logging.LogUtils.getLogger().info("WMI : recettes non lues par mod et par type : " + unreadTypes);
+            }
+            if (!coverage.isEmpty()) {
+                StringBuilder report = new StringBuilder("WMI : recettes lues par mod (lues/reçues, types) :");
+                coverage.forEach((ns, c) -> report.append(' ').append(ns).append(' ').append(c[1]).append('/').append(c[0])
+                        .append(" (").append(typesByMod.getOrDefault(ns, Set.of()).size()).append(") ;"));
+                com.mojang.logging.LogUtils.getLogger().info(report.toString());
+            }
+        }
+
+        private void logTimings() {
+            WmiPerf.logRebuild(phaseNanos[ITEMS], phaseNanos[RECIPES], phaseNanos[EXTRACTORS], phaseNanos[INDEXING],
+                    phaseNanos[DONE], catalog.size(), recipesRead, holders.size(), steps,
+                    System.nanoTime() - startNanos);
         }
     }
 
@@ -304,63 +502,6 @@ public final class WmiClientIndex {
         } catch (Exception ignored) {
         }
         return Collections.unmodifiableList(tabs);
-    }
-
-    /** Vrai pendant la lecture des infobulles par l'index : les ajouts de WMI aux infobulles s'abstiennent. */
-    static volatile boolean collectingTooltips = false;
-
-    private static List<CatalogItem> buildCatalog(Minecraft mc) {
-        collectingTooltips = true;
-        try {
-            return buildCatalogLines(mc);
-        } finally {
-            collectingTooltips = false;
-        }
-    }
-
-    private static List<CatalogItem> buildCatalogLines(Minecraft mc) {
-        STACK_BY_ID.clear();
-        Map<String, String> modNames = new LinkedHashMap<>();
-        modNames.put("minecraft", "Minecraft");
-        WmiPlatform.forEachMod(modNames::put);
-
-        List<CatalogItem> list = new ArrayList<>();
-        Item.TooltipContext tooltipCtx = (mc != null && mc.level != null) ? Item.TooltipContext.of(mc.level) : Item.TooltipContext.EMPTY;
-
-        for (Holder.Reference<Item> ref : BuiltInRegistries.ITEM.listElements().toList()) {
-            Item item = ref.value();
-            if (item == Items.AIR) {
-                continue;
-            }
-            Identifier key = ref.key().identifier();
-            String id = key.toString();
-            String ns = key.getNamespace();
-            String modName = modNames.getOrDefault(ns, ns);
-            ItemStack stack = new ItemStack(item);
-            STACK_BY_ID.put(id, stack);
-
-            String displayName = WmiNames.of(stack);
-            Set<String> tags = new LinkedHashSet<>();
-            ref.tags().forEach(tagKey -> tags.add(tagKey.location().toString()));
-            String category = classifyItemCategory(item, stack, key.getPath(), tags);
-
-            StringBuilder tipBuilder = new StringBuilder();
-            if (mc != null && mc.player != null) {
-                try {
-                    List<Component> lines = stack.getTooltipLines(tooltipCtx, mc.player, TooltipFlag.Default.NORMAL);
-                    for (int i = 1; i < lines.size(); i++) {
-                        if (tipBuilder.length() > 0) {
-                            tipBuilder.append(' ');
-                        }
-                        tipBuilder.append(lines.get(i).getString());
-                    }
-                } catch (Exception ignored) {
-                }
-            }
-
-            list.add(new CatalogItem(id, ns, modName, displayName, category, Math.max(1, stack.getMaxStackSize()), tags, tipBuilder.toString()));
-        }
-        return list;
     }
 
     private static String classifyItemCategory(Item item, ItemStack stack, String path, Set<String> tags) {

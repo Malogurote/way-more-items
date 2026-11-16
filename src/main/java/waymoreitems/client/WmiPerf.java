@@ -108,16 +108,20 @@ public final class WmiPerf {
                 RIGHT_PANEL.summary(), CATALOG_LIST.summary(), CATALOG_REBUILD.summary()));
     }
 
-    /** Durées de {@code WmiClientIndex.rebuildNow}, par phase, en nanosecondes. */
+    /**
+     * Durées d'une construction de l'index, par phase, en nanosecondes : temps de travail effectif (la somme), puis
+     * nombre de tranches et durée écoulée entre le début et la publication (construction étalée sur plusieurs ticks).
+     */
     static void logRebuild(long catalog, long recipes, long extractors, long index, long tabs, int items,
-                           int recipesRead, int recipesReceived) {
+                           int recipesRead, int recipesReceived, int steps, long wallNanos) {
         if (!enabled) {
             return;
         }
         LogUtils.getLogger().info(String.format(Locale.ROOT,
                 "WMI perf rebuildNow: total %.1f ms (catalog %.1f, recipes %.1f, extractors %.1f, index %.1f,"
-                        + " creative tabs %.1f) | %d items, %d/%d recipes read",
+                        + " creative tabs %.1f) | %d steps, %.1f ms wall | %d items, %d/%d recipes read",
                 (catalog + recipes + extractors + index + tabs) / 1e6, catalog / 1e6, recipes / 1e6,
-                extractors / 1e6, index / 1e6, tabs / 1e6, items, recipesRead, recipesReceived));
+                extractors / 1e6, index / 1e6, tabs / 1e6, steps, wallNanos / 1e6, items, recipesRead,
+                recipesReceived));
     }
 }
