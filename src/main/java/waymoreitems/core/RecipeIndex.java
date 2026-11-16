@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.UnaryOperator;
+import java.util.regex.Pattern;
 
 /**
  * Graphe des recettes et index de recherche du catalogue de Way More Items (Java pur).
@@ -125,7 +127,7 @@ public final class RecipeIndex {
      * de son espace de noms ; une recette appartient à chaque groupe qui contient au moins un de ses produits
      * (une seule fois par groupe). Résultat : groupe, puis {objets, recettes}.
      */
-    public Map<String, int[]> countsByGroup(java.util.function.UnaryOperator<String> groupOfNamespace) {
+    public Map<String, int[]> countsByGroup(UnaryOperator<String> groupOfNamespace) {
         Map<String, int[]> res = new HashMap<>();
         for (CatalogItem it : items) {
             res.computeIfAbsent(groupOfNamespace.apply(it.namespace()), k -> new int[2])[0]++;
@@ -224,7 +226,7 @@ public final class RecipeIndex {
         if (query == null) {
             return "";
         }
-        return query.replaceAll("(?i)(^|(?<=[\\s|]))" + java.util.regex.Pattern.quote(CRAFTABLE_KEYWORD) + "(?=$|[\\s|])", "").trim();
+        return query.replaceAll("(?i)(^|(?<=[\\s|]))" + Pattern.quote(CRAFTABLE_KEYWORD) + "(?=$|[\\s|])", "").trim();
     }
 
     /**

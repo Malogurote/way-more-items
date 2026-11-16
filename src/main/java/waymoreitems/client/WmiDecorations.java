@@ -136,11 +136,7 @@ final class WmiDecorations {
                     ItemStack st = d.get("item") instanceof String id ? WmiClientIndex.stackFor(id) : ItemStack.EMPTY;
                     if (!st.isEmpty()) {
                         float sc = Math.min(r.w(), r.h()) / 16.0F;
-                        g.pose().pushMatrix();
-                        g.pose().translate(r.x(), r.y());
-                        g.pose().scale(sc, sc);
-                        g.fakeItem(st, 0, 0);
-                        g.pose().popMatrix();
+                        WmiDraw.drawScaledItem(g, st, r.x(), r.y(), sc);
                     }
                 }
                 default -> {

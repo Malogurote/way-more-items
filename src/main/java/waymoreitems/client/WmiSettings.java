@@ -1,6 +1,7 @@
 package waymoreitems.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -29,6 +30,8 @@ import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
 import waymoreitems.WmiMod;
 import waymoreitems.WmiPayloads;
 import waymoreitems.core.CatalogItem;
@@ -38,7 +41,6 @@ import waymoreitems.core.PinnedChecklist;
 import waymoreitems.core.RecipeIndex;
 import waymoreitems.core.SettingsFile;
 import waymoreitems.core.ThemePalette;
-import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -59,6 +61,7 @@ import java.util.Set;
  * compris, lus et enregistrés dans {@code config/wmi-client.properties} par {@link SettingsFile}.
  */
 public final class WmiSettings {
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     public static final int GRID_ICON_MIN = 12;
     public static final int GRID_ICON_MAX = 32;
@@ -186,7 +189,8 @@ public final class WmiSettings {
         if (checklist.goalCount() == 0) {
             try {
                 checklist.loadGoals(props.string("savedGoals", ""));
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException e) {
+                LOGGER.warn("Could not read the saved goals", e);
                 // objectifs illisibles : liste vide, le reste des réglages est lu normalement
             }
             lastSavedGoals = checklist.serializeGoals();
@@ -215,7 +219,8 @@ public final class WmiSettings {
                 customHue = Math.max(0.0F, Math.min(1.0F, Float.parseFloat(hsv[0])));
                 customSat = Math.max(0.0F, Math.min(1.0F, Float.parseFloat(hsv[1])));
                 customVal = Math.max(0.0F, Math.min(1.0F, Float.parseFloat(hsv[2])));
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException e) {
+                LOGGER.debug("Invalid custom colour value in the settings file", e);
             }
         }
         String th = props.string("theme", WmiTheme.ANTHRACITE.name());
@@ -326,7 +331,8 @@ public final class WmiSettings {
         props.setProperty("hideWithDebug", Boolean.toString(hideWithDebug));
         try {
             SettingsFile.storeAtomic(WmiPlatform.configFile("wmi-client.properties"), props, "Way More Items (WMI) - Parametres Client");
-        } catch (IOException | RuntimeException ignored) {
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("Could not save the settings file", e);
             // enregistrement retenté à la prochaine modification ; l'ancien fichier reste intact (écriture atomique)
         }
     }

@@ -133,3 +133,28 @@ tasks.register('verifierCloisonnement') {
     }
 }
 tasks.named('compileJava') { dependsOn 'verifierCloisonnement' }
+
+// Compilation contre une autre version de NeoForge, à lancer avant chaque montée de version :
+//   gradle compilerContreNeoForge -PneoCible=<version de NeoForge>
+// La version doit être donnée explicitement (rien n'est cherché sur le réseau). Hors ligne par défaut : seules les
+// versions déjà présentes dans le cache Gradle compilent ; ajouter -PneoTelechargement=oui autorise le téléchargement
+// de la version cible (à ne faire qu'avec l'accord du propriétaire du dépôt). Les erreurs de compilation désignent
+// les API à reprendre ; la liste des API employées est dans la documentation interne « API employées ».
+tasks.register('compilerContreNeoForge', GradleBuild) {
+    group = 'verification'
+    description = 'Compile WMI contre la version de NeoForge donnée par -PneoCible (hors ligne sauf -PneoTelechargement=oui).'
+    notCompatibleWithConfigurationCache('GradleBuild lance un second build avec une autre version de NeoForge')
+    def cible = providers.gradleProperty('neoCible')
+    def telechargement = providers.gradleProperty('neoTelechargement').getOrElse('non') == 'oui'
+    dir = projectDir
+    tasks = ['compileJava']
+    if (cible.present) {
+        startParameter.projectProperties = ['neo_version': cible.get()]
+        startParameter.offline = !telechargement
+    }
+    doFirst {
+        if (!cible.present) {
+            throw new GradleException('Donner la version de NeoForge : gradle compilerContreNeoForge -PneoCible=<version>')
+        }
+    }
+}

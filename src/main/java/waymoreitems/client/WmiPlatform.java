@@ -1,7 +1,9 @@
 package waymoreitems.client;
 
+import com.mojang.logging.LogUtils;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLPaths;
+import org.slf4j.Logger;
 
 import java.nio.file.Path;
 import java.util.function.BiConsumer;
@@ -12,6 +14,7 @@ import java.util.function.BiConsumer;
  * ne touche qu'ici.
  */
 public final class WmiPlatform {
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     private WmiPlatform() {
     }
@@ -20,7 +23,8 @@ public final class WmiPlatform {
     public static Path configDir() {
         try {
             return FMLPaths.CONFIGDIR.get();
-        } catch (Throwable ignored) {
+        } catch (RuntimeException e) {
+            LOGGER.debug("Config directory not available yet", e);
             return Path.of("config");
         }
     }
@@ -29,7 +33,8 @@ public final class WmiPlatform {
     public static Path configFile(String name) {
         try {
             return FMLPaths.CONFIGDIR.get().resolve(name);
-        } catch (Throwable ignored) {
+        } catch (RuntimeException e) {
+            LOGGER.debug("Config directory not available yet", e);
             return Path.of(name);
         }
     }
@@ -38,7 +43,8 @@ public final class WmiPlatform {
     public static boolean isModLoaded(String modId) {
         try {
             return ModList.get() != null && ModList.get().isLoaded(modId);
-        } catch (Throwable t) {
+        } catch (RuntimeException e) {
+            LOGGER.debug("Mod list not available yet", e);
             return false;
         }
     }

@@ -1,10 +1,14 @@
 package waymoreitems.client;
 
+import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
@@ -33,6 +37,8 @@ import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 import net.minecraft.world.item.crafting.display.SmithingRecipeDisplay;
 import net.minecraft.world.item.crafting.display.StonecutterRecipeDisplay;
 import net.minecraft.world.level.block.EntityBlock;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
 import waymoreitems.api.RecipeLayoutSpec;
 import waymoreitems.api.WmiRegistry;
 import waymoreitems.core.CatalogItem;
@@ -50,6 +56,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  * Extracteur universel des objets et des recettes côté client (Minecraft 26.3, NeoForge).
@@ -57,6 +65,7 @@ import java.util.Set;
  * et les tags du registre d'objets soient liés côté client.
  */
 public final class WmiClientIndex {
+    private static final Logger LOGGER = LogUtils.getLogger();
     public record CreativeTabEntry(String id, String title, ItemStack icon, Set<String> itemIds) {
     }
 
@@ -66,7 +75,7 @@ public final class WmiClientIndex {
     private static volatile boolean needsRebuild = true;
     private static volatile boolean builtWithBoundTags = false;
     /** Table de traduction de Minecraft en vigueur lors de la dernière construction de l'index. */
-    private static volatile net.minecraft.locale.Language builtWithLanguage;
+    private static volatile Language builtWithLanguage;
     private static int ticksWaitingForTags = 0;
     private static final Map<String, ItemStack> STACK_BY_ID = new LinkedHashMap<>();
 
@@ -99,14 +108,14 @@ public final class WmiClientIndex {
     }
 
     /** Recette reçue du serveur portant cet identifiant ({@code espace:chemin}), ou {@code null}. */
-    public static net.minecraft.world.item.crafting.@org.jspecify.annotations.Nullable Recipe<?> recipeById(String recipeId) {
+    public static net.minecraft.world.item.crafting.@Nullable Recipe<?> recipeById(String recipeId) {
         RecipeMap map = pendingRecipeMap;
         Identifier id = recipeId == null ? null : Identifier.tryParse(recipeId);
         if (map == null || id == null) {
             return null;
         }
-        RecipeHolder<?> holder = map.byKey(net.minecraft.resources.ResourceKey.create(
-                net.minecraft.core.registries.Registries.RECIPE, id));
+        RecipeHolder<?> holder = map.byKey(ResourceKey.create(
+                Registries.RECIPE, id));
         return holder == null ? null : holder.value();
     }
 
@@ -142,7 +151,7 @@ public final class WmiClientIndex {
         }
         // Langue du jeu changée (ou ressources rechargées) : Minecraft remplace sa table de traduction à la fin du
         // rechargement ; les noms indexés, donc la recherche, doivent suivre
-        if (net.minecraft.locale.Language.getInstance() != builtWithLanguage && !currentIndex.allItems().isEmpty()) {
+        if (Language.getInstance() != builtWithLanguage && !currentIndex.allItems().isEmpty()) {
             WmiNames.reset();
             needsRebuild = true;
             ticksWaitingForTags = 15;
@@ -170,7 +179,8 @@ public final class WmiClientIndex {
                 STACK_BY_ID.put(itemId, s);
                 return s;
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            LOGGER.debug("Could not build the stack for item", e);
         }
         return ItemStack.EMPTY;
     }
@@ -192,7 +202,7 @@ public final class WmiClientIndex {
 
     public static synchronized void rebuildNow() {
         Minecraft mc = Minecraft.getInstance();
-        builtWithLanguage = net.minecraft.locale.Language.getInstance();
+        builtWithLanguage = Language.getInstance();
         ContextMap context = (mc != null && mc.level != null) ? SlotDisplayContext.fromLevel(mc.level) : ContextMap.EMPTY;
         boolean tagsBound = BuiltInRegistries.ITEM.getTags().findAny().isPresent();
 
@@ -201,9 +211,9 @@ public final class WmiClientIndex {
 
         RecipeMap map = pendingRecipeMap;
         // Mesure de couverture par mod : recettes reçues, recettes lues, types de recettes
-        java.util.Map<String, int[]> coverage = new java.util.TreeMap<>();
-        java.util.Map<String, java.util.Set<String>> typesByMod = new java.util.TreeMap<>();
-        java.util.Map<String, java.util.Map<String, Integer>> unreadTypes = new java.util.TreeMap<>();
+        Map<String, int[]> coverage = new TreeMap<>();
+        Map<String, Set<String>> typesByMod = new TreeMap<>();
+        Map<String, Map<String, Integer>> unreadTypes = new TreeMap<>();
         if (map != null) {
             for (RecipeHolder<?> holder : map.values()) {
                 String ns = holder.id().identifier().getNamespace();
@@ -215,29 +225,31 @@ public final class WmiClientIndex {
                     if (entry != null && !entry.outputs().isEmpty()) {
                         entries.add(entry);
                         c[1]++;
-                        typesByMod.computeIfAbsent(ns, k -> new java.util.TreeSet<>()).add(entry.typeId());
+                        typesByMod.computeIfAbsent(ns, k -> new TreeSet<>()).add(entry.typeId());
                     }
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    LOGGER.debug("A recipe could not be converted and was skipped", e);
                 }
                 if (c[1] == readBefore) {
                     String type;
                     try {
                         type = String.valueOf(BuiltInRegistries.RECIPE_TYPE.getKey(holder.value().getType()));
                     } catch (Exception e) {
+                        LOGGER.debug("Could not read the type of a recipe", e);
                         type = "?";
                     }
-                    unreadTypes.computeIfAbsent(ns, k -> new java.util.TreeMap<>()).merge(type, 1, Integer::sum);
+                    unreadTypes.computeIfAbsent(ns, k -> new TreeMap<>()).merge(type, 1, Integer::sum);
                 }
             }
         }
         if (!unreadTypes.isEmpty()) {
-            com.mojang.logging.LogUtils.getLogger().info("WMI : recettes non lues par mod et par type : " + unreadTypes);
+            LOGGER.info("WMI : recettes non lues par mod et par type : " + unreadTypes);
         }
         if (!coverage.isEmpty()) {
             StringBuilder report = new StringBuilder("WMI : recettes lues par mod (lues/reçues, types) :");
             coverage.forEach((ns, c) -> report.append(' ').append(ns).append(' ').append(c[1]).append('/').append(c[0])
-                    .append(" (").append(typesByMod.getOrDefault(ns, java.util.Set.of()).size()).append(") ;"));
-            com.mojang.logging.LogUtils.getLogger().info(report.toString());
+                    .append(" (").append(typesByMod.getOrDefault(ns, Set.of()).size()).append(") ;"));
+            LOGGER.info(report.toString());
         }
 
         for (WmiRegistry.CustomRecipeExtractor ext : WmiRegistry.extractors()) {
@@ -246,7 +258,8 @@ public final class WmiClientIndex {
                 if (custom != null) {
                     entries.addAll(custom);
                 }
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                LOGGER.debug("A custom recipe extractor failed", e);
             }
         }
 
@@ -261,7 +274,8 @@ public final class WmiClientIndex {
         if (mc != null && mc.level != null) {
             try {
                 CreativeModeTabs.tryRebuildTabContents(mc.level.enabledFeatures(), true, mc.level.registryAccess());
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                LOGGER.debug("Could not rebuild the creative tab contents", e);
             }
         }
         try {
@@ -282,7 +296,8 @@ public final class WmiClientIndex {
                 ItemStack icon = ItemStack.EMPTY;
                 try {
                     icon = tab.getIconItem();
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    LOGGER.debug("Could not read the icon of a creative tab", e);
                 }
                 if (icon == null || icon.isEmpty()) {
                     icon = new ItemStack(Items.COMPASS);
@@ -290,7 +305,8 @@ public final class WmiClientIndex {
                 String title = tab.getDisplayName().getString();
                 tabs.add(new CreativeTabEntry(ref.key().identifier().toString(), title, icon, Collections.unmodifiableSet(ids)));
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            LOGGER.debug("Could not read the creative tabs", e);
         }
         return Collections.unmodifiableList(tabs);
     }
@@ -343,7 +359,8 @@ public final class WmiClientIndex {
                         }
                         tipBuilder.append(lines.get(i).getString());
                     }
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    LOGGER.debug("Could not read the tooltip of an item", e);
                 }
             }
 
@@ -356,8 +373,8 @@ public final class WmiClientIndex {
         String p = path.toLowerCase(Locale.ROOT);
         if (item instanceof BlockItem bi) {
             if (bi.getBlock() instanceof EntityBlock
-                    || p.contains("machine") || p.contains("furnace") || p.contains("macerator")
-                    || p.contains("compressor") || p.contains("extractor") || p.contains("generator")
+                    || p.contains("machine") || p.contains("furnace")
+                    || p.contains("generator")
                     || p.contains("boiler") || p.contains("turbine") || p.contains("solar")
                     || p.contains("wind") || p.contains("pump") || p.contains("pipe")
                     || p.contains("cable") || p.contains("conveyor") || p.contains("crafter")
@@ -407,7 +424,8 @@ public final class WmiClientIndex {
                     return fromDisp;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            LOGGER.debug("Could not read a recipe through its display", e);
         }
 
         // 2. Types standards de Minecraft (secours direct)
@@ -428,7 +446,7 @@ public final class WmiClientIndex {
             }
         } else if (recipe instanceof ShapelessRecipe shapeless) {
             RecipeEntry.ItemAmount out = fromTemplate(shapeless.result());
-            List<RecipeEntry.IngredientSlot> inputs = extractIngredientsFromFieldsAndMethods(shapeless, 1, 1, 1);
+            List<RecipeEntry.IngredientSlot> inputs = extractIngredientsFromFieldsAndMethods(shapeless, 1);
             if (out != null && !inputs.isEmpty()) {
                 return new RecipeEntry(recipeId, typeId, categoryName, workstations, inputs, List.of(), List.of(out), 0, 0, 0);
             }
@@ -572,14 +590,12 @@ public final class WmiClientIndex {
             Recipe<?> recipe
     ) {
         int count = invokeInt(recipe, "count", 1);
-        int firstCount = invokeInt(recipe, "firstCount", count);
-        int secondCount = invokeInt(recipe, "secondCount", 1);
         int duration = invokeInt(recipe, "cookingTime", invokeInt(recipe, "time", invokeInt(recipe, "duration", 0)));
-        int euPerTick = invokeInt(recipe, "euPerTick", 0);
+        int energyPerTick = invokeInt(recipe, "energyPerTick", 0);
 
-        long totalEnergy = (long) duration * euPerTick;
+        long totalEnergy = (long) duration * energyPerTick;
 
-        List<RecipeEntry.IngredientSlot> inputs = extractIngredientsFromFieldsAndMethods(recipe, count, firstCount, secondCount);
+        List<RecipeEntry.IngredientSlot> inputs = extractIngredientsFromFieldsAndMethods(recipe, count);
         List<RecipeEntry.IngredientSlot> catalysts = new ArrayList<>();
         List<RecipeEntry.ItemAmount> outputs = new ArrayList<>();
 
@@ -592,25 +608,22 @@ public final class WmiClientIndex {
         if (outputs.isEmpty()) {
             return null;
         }
-        return new RecipeEntry(recipeId, typeId, categoryName, workstations, inputs, catalysts, outputs, duration, euPerTick, totalEnergy);
+        return new RecipeEntry(recipeId, typeId, categoryName, workstations, inputs, catalysts, outputs, duration, energyPerTick, totalEnergy);
     }
 
     private static List<RecipeEntry.IngredientSlot> extractIngredientsFromFieldsAndMethods(
             Object recipe,
-            int defaultCount,
-            int firstCount,
-            int secondCount
+            int defaultCount
     ) {
         List<RecipeEntry.IngredientSlot> inputs = new ArrayList<>();
         for (Class<?> c = recipe.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
             for (Field f : c.getDeclaredFields()) {
                 f.setAccessible(true);
-                String name = f.getName();
                 Class<?> type = f.getType();
                 try {
                     if (type == Ingredient.class) {
                         Ingredient ing = (Ingredient) f.get(recipe);
-                        int qty = name.equals("first") ? firstCount : (name.equals("second") ? secondCount : defaultCount);
+                        int qty = defaultCount;
                         RecipeEntry.IngredientSlot slot = fromIngredient(ing, qty);
                         if (slot != null) {
                             inputs.add(slot);
@@ -618,7 +631,7 @@ public final class WmiClientIndex {
                     } else if (type == Optional.class) {
                         Optional<?> opt = (Optional<?>) f.get(recipe);
                         if (opt != null && opt.isPresent() && opt.get() instanceof Ingredient ing) {
-                            int qty = name.equals("second") ? secondCount : 1;
+                            int qty = 1;
                             RecipeEntry.IngredientSlot slot = fromIngredient(ing, qty);
                             if (slot != null) {
                                 inputs.add(slot);
@@ -642,7 +655,8 @@ public final class WmiClientIndex {
                             }
                         }
                     }
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    LOGGER.debug("Could not read the ingredients of a recipe by reflection", e);
                 }
             }
         }
@@ -656,7 +670,8 @@ public final class WmiClientIndex {
             if (amt != null) {
                 return amt;
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            LOGGER.debug("Could not assemble the result of a recipe", e);
         }
         for (Class<?> c = recipe.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
             for (Field f : c.getDeclaredFields()) {
@@ -674,7 +689,8 @@ public final class WmiClientIndex {
                             return amt;
                         }
                     }
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    LOGGER.debug("Could not read a recipe result field by reflection", e);
                 }
             }
         }
@@ -689,7 +705,8 @@ public final class WmiClientIndex {
             if (val instanceof Number n) {
                 return n.intValue();
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            LOGGER.debug("Could not read a number from a recipe by reflection", e);
         }
         return fallback;
     }
@@ -712,7 +729,8 @@ public final class WmiClientIndex {
                     }
                 }
             });
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            LOGGER.debug("Could not read the items of an ingredient", e);
             return null;
         }
         if (alts.isEmpty()) {
@@ -724,7 +742,8 @@ public final class WmiClientIndex {
             if (keyOpt.isPresent()) {
                 tagId = keyOpt.get().location().toString();
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            LOGGER.debug("Could not read the tag of an ingredient", e);
         }
         return new RecipeEntry.IngredientSlot(alts, Math.max(1, count), tagId);
     }

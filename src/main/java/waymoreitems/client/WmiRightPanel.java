@@ -1,6 +1,7 @@
 package waymoreitems.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import java.util.HashSet;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -155,7 +156,7 @@ final class WmiRightPanel {
     int modTabsSourceSize = -1;
 
     /** Espaces de noms connus du catalogue (pour regrouper un mod et ses extensions). */
-    java.util.Set<String> knownNamespaces = java.util.Set.of();
+    Set<String> knownNamespaces = Set.of();
 
     /**
      * Clé d'onglet d'un espace de noms : un mod dont l'identifiant prolonge celui d'un autre mod présent
@@ -178,7 +179,7 @@ final class WmiRightPanel {
         }
         Map<String, String> titles = new HashMap<>();
         Map<String, String> firstItem = new HashMap<>();
-        java.util.Set<String> namespaces = new java.util.HashSet<>();
+        Set<String> namespaces = new HashSet<>();
         for (CatalogItem it : all) {
             namespaces.add(it.namespace());
         }
@@ -436,14 +437,10 @@ final class WmiRightPanel {
             bar(g, x + 1, y + h - 2, x + w - 1, y + h, isPurple ? theme().purple : theme().accent);
         }
         if (text != null && !text.isEmpty()) {
-            g.pose().pushMatrix();
-            g.pose().translate(x + 2, y + 2);
-            g.pose().scale(0.88F, 0.88F);
-            g.fakeItem(icon, 0, 0);
-            g.pose().popMatrix();
+            WmiDraw.drawScaledItem(g, icon, x + 2, y + 2, 0.88F);
             drawText(g, font, text, x + 17, y + (h - 8) / 2, active ? theme().accent : theme().textMain);
         } else {
-            g.fakeItem(icon, x + (w - 16) / 2, y + (h - 16) / 2);
+            WmiDraw.drawItem(g, icon, x + (w - 16) / 2, y + (h - 16) / 2);
         }
         o.buttons.drawn.add(new QuickButton(x, y, w, h, text != null ? text : "", tooltip, onClick, null));
     }

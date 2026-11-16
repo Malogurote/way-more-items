@@ -1,5 +1,6 @@
 package waymoreitems.core;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -18,7 +19,7 @@ import java.util.Set;
  * @param catalysts       catalyseurs ou outils non consommés (ou consommés partiellement) associés à la recette
  * @param outputs         produits de sortie avec leur quantité
  * @param durationTicks   durée de transformation en ticks (0 si instantané, ex. établi)
- * @param euPerTick       consommation ou production en EU/t (0 si sans énergie)
+ * @param energyPerTick       consommation ou production en EU/t (0 si sans énergie)
  * @param totalEnergy     énergie totale en EU (0 si sans énergie)
  * @param inputCells      case de la grille d'artisanat 3 x 3 (0 à 8, ligne par ligne) de chaque ingrédient de
  *                        {@code inputs}, pour les recettes à forme ; vide : ingrédients posés à la suite
@@ -32,7 +33,7 @@ public record RecipeEntry(
         List<IngredientSlot> catalysts,
         List<ItemAmount> outputs,
         int durationTicks,
-        int euPerTick,
+        int energyPerTick,
         long totalEnergy,
         List<Integer> inputCells
 ) {
@@ -42,8 +43,8 @@ public record RecipeEntry(
     /** Recette sans forme : ingrédients posés à la suite. */
     public RecipeEntry(String id, String typeId, String categoryName, List<String> workstations,
                        List<IngredientSlot> inputs, List<IngredientSlot> catalysts, List<ItemAmount> outputs,
-                       int durationTicks, int euPerTick, long totalEnergy) {
-        this(id, typeId, categoryName, workstations, inputs, catalysts, outputs, durationTicks, euPerTick, totalEnergy, List.of());
+                       int durationTicks, int energyPerTick, long totalEnergy) {
+        this(id, typeId, categoryName, workstations, inputs, catalysts, outputs, durationTicks, energyPerTick, totalEnergy, List.of());
     }
 
     public RecipeEntry {
@@ -80,7 +81,7 @@ public record RecipeEntry(
         if (width < 1 || width > GRID_WIDTH || present == null || present.size() > width * GRID_WIDTH) {
             return List.of();
         }
-        List<Integer> cells = new java.util.ArrayList<>();
+        List<Integer> cells = new ArrayList<>();
         for (int i = 0; i < present.size(); i++) {
             if (Boolean.TRUE.equals(present.get(i))) {
                 cells.add((i / width) * GRID_WIDTH + (i % width));

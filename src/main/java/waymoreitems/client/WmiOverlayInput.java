@@ -386,8 +386,8 @@ final class WmiOverlayInput {
 
     public boolean onKeyPressed(AbstractContainerScreen<?> screen, KeyEvent event) {
         int key = event.key();
-        boolean isEsc = event.isEscape() || key == InputConstants.KEY_ESCAPE || key == 256;
-        boolean isEnter = event.isConfirmation() || key == InputConstants.KEY_RETURN || key == 257 || key == 335;
+        boolean isEsc = event.isEscape() || key == InputConstants.KEY_ESCAPE;
+        boolean isEnter = event.isConfirmation() || key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER;
 
         if (o.visible && o.notes.postItInputFocused) {
             if (isEsc) {

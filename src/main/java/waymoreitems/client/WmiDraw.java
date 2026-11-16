@@ -292,6 +292,40 @@ public final class WmiDraw {
         g.disableScissor();
     }
 
+    /** Rectangle plein sans arrondi ni lissage, bornes {@code (x0, y0)} incluse et {@code (x1, y1)} exclue. */
+    public static void fillRect(GuiGraphicsExtractor g, int x0, int y0, int x1, int y1, int color) {
+        g.fill(x0, y0, x1, y1, color);
+    }
+
+    /** Objet à taille normale (16 unités), coin supérieur gauche en {@code (x, y)}. */
+    public static void drawItem(GuiGraphicsExtractor g, ItemStack stack, int x, int y) {
+        g.fakeItem(stack, x, y);
+    }
+
+    /** Objet mis à l'échelle {@code scale} (1 = 16 unités), coin supérieur gauche en {@code (x, y)}. */
+    public static void drawScaledItem(GuiGraphicsExtractor g, ItemStack stack, float x, float y, float scale) {
+        pushScale(g, x, y, scale);
+        g.fakeItem(stack, 0, 0);
+        popScale(g);
+    }
+
+    /** Image carrée ou rectangulaire entière d'une texture, dessinée à {@code w} sur {@code h}. */
+    public static void drawIcon(GuiGraphicsExtractor g, Identifier texture, int x, int y, int w, int h) {
+        g.blit(RenderPipelines.GUI_TEXTURED, texture, x, y, 0.0F, 0.0F, w, h, w, h);
+    }
+
+    /** Ouvre un repère décalé de {@code (x, y)} et mis à l'échelle {@code scale} ; à fermer par {@link #popScale}. */
+    public static void pushScale(GuiGraphicsExtractor g, float x, float y, float scale) {
+        g.pose().pushMatrix();
+        g.pose().translate(x, y);
+        g.pose().scale(scale, scale);
+    }
+
+    /** Referme le repère ouvert par {@link #pushScale}. */
+    public static void popScale(GuiGraphicsExtractor g) {
+        g.pose().popMatrix();
+    }
+
     /** Case à cocher dessinée de 8 unités (remplace les crochets « [ ] » et « [x] »). */
     public static void drawCheckbox(GuiGraphicsExtractor g, int x, int y, boolean checked) {
         drawBox(g, x, y, 8, 8, checked ? theme().accentSoft : theme().slotBg,

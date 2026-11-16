@@ -1,21 +1,11 @@
 package waymoreitems;
 
 import com.mojang.datafixers.util.Pair;
+import com.mojang.logging.LogUtils;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
-import net.minecraft.util.Util;
-import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraft.world.item.enchantment.EnchantmentHelper;
-import net.minecraft.world.item.enchantment.EnchantmentInstance;
-import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.levelgen.feature.EndPlatformFeature;
-import net.minecraft.world.level.storage.LevelData;
-import net.neoforged.neoforge.network.PacketDistributor;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -28,27 +18,40 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
+import net.minecraft.util.Util;
 import net.minecraft.world.clock.ServerClockManager;
 import net.minecraft.world.clock.WorldClock;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.item.crafting.ShapedRecipe;
-import net.minecraft.world.item.crafting.RecipeHolder;
-import net.minecraft.world.item.crafting.Recipe;
-import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.inventory.AbstractCraftingMenu;
 import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.ShapedRecipe;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.feature.EndPlatformFeature;
+import net.minecraft.world.level.storage.LevelData;
 import net.minecraft.world.phys.AABB;
+import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
+import org.slf4j.Logger;
 import waymoreitems.core.CommandPalette;
 import waymoreitems.core.InventorySorter;
 
@@ -59,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Paquets réseau client -> serveur de Way More Items :
@@ -75,6 +79,7 @@ import java.util.Set;
  * </ul>
  */
 public final class WmiPayloads {
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     public record ActionPayload(String actionId) implements CustomPacketPayload {
         public static final Type<ActionPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(WmiMod.MODID, "action"));
@@ -483,7 +488,7 @@ public final class WmiPayloads {
     }
 
     /** Dernière recherche de biome par joueur (millisecondes) : une recherche au plus toutes les deux secondes. */
-    private static final Map<java.util.UUID, Long> LAST_BIOME_SEARCH = new HashMap<>();
+    private static final Map<UUID, Long> LAST_BIOME_SEARCH = new HashMap<>();
     private static final long BIOME_SEARCH_COOLDOWN_MS = 2000L;
 
     /**
@@ -628,6 +633,7 @@ public final class WmiPayloads {
         try {
             id = Identifier.parse(itemId);
         } catch (Exception e) {
+            LOGGER.debug("Ignored a give request with an invalid item id", e);
             return;
         }
         Item item = BuiltInRegistries.ITEM.getValue(id);
@@ -765,7 +771,7 @@ public final class WmiPayloads {
     }
 
     private static String categorizeStack(ItemStack stack) {
-        if (stack.getItem() instanceof net.minecraft.world.item.BlockItem) {
+        if (stack.getItem() instanceof BlockItem) {
             return "01_blocks";
         }
         if (stack.getMaxStackSize() == 1) {
