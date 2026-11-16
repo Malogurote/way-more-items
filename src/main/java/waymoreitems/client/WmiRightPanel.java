@@ -152,18 +152,25 @@ final class WmiRightPanel {
     }
 
     List<ModTab> modTabsCache = List.of();
-    int modTabsSourceSize = -1;
+    private @Nullable RecipeIndex modTabsSource;
 
     /** Espaces de noms connus du catalogue (pour regrouper un mod et ses extensions). */
     java.util.Set<String> knownNamespaces = java.util.Set.of();
+    /** Onglet de chaque espace de noms du catalogue, calculé avec les onglets ({@link #modTabs()}). */
+    private Map<String, String> tabKeyByNamespace = Map.of();
 
     /**
      * Clé d'onglet d'un espace de noms : un mod dont l'identifiant prolonge celui d'un autre mod présent
      * (par exemple {@code monmod_extension} et {@code monmod}) partage l'onglet de ce dernier.
      */
     String tabKey(String namespace) {
+        String known = tabKeyByNamespace.get(namespace);
+        return known != null ? known : computeTabKey(namespace, knownNamespaces);
+    }
+
+    private static String computeTabKey(String namespace, java.util.Set<String> namespaces) {
         String best = namespace;
-        for (String other : knownNamespaces) {
+        for (String other : namespaces) {
             if (!other.equals(namespace) && namespace.startsWith(other + "_") && other.length() < best.length()) {
                 best = other;
             }
@@ -171,23 +178,30 @@ final class WmiRightPanel {
         return best;
     }
 
+    /** Onglets par mod, recalculés seulement quand l'index change. */
     List<ModTab> modTabs() {
-        List<CatalogItem> all = WmiClientIndex.get().allItems();
-        if (all.size() == modTabsSourceSize) {
+        RecipeIndex index = WmiClientIndex.get();
+        if (index == modTabsSource) {
             return modTabsCache;
         }
-        Map<String, String> titles = new HashMap<>();
-        Map<String, String> firstItem = new HashMap<>();
+        List<CatalogItem> all = index.allItems();
         java.util.Set<String> namespaces = new java.util.HashSet<>();
         for (CatalogItem it : all) {
             namespaces.add(it.namespace());
         }
+        Map<String, String> keys = new HashMap<>(namespaces.size() * 2);
+        for (String ns : namespaces) {
+            keys.put(ns, computeTabKey(ns, namespaces));
+        }
         knownNamespaces = namespaces;
+        tabKeyByNamespace = keys;
+        Map<String, String> titles = new HashMap<>();
+        Map<String, String> firstItem = new HashMap<>();
         for (CatalogItem it : all) {
-            if (!tabKey(it.namespace()).equals(it.namespace())) {
+            String key = keys.get(it.namespace());
+            if (!key.equals(it.namespace())) {
                 continue;
             }
-            String key = tabKey(it.namespace());
             if (!titles.containsKey(key)) {
                 String title = "minecraft".equals(key) ? "Minecraft"
                         : (it.modName() == null || it.modName().isBlank() ? key : it.modName());
@@ -195,15 +209,15 @@ final class WmiRightPanel {
                 firstItem.put(key, it.id());
             }
         }
-        List<String> keys = new ArrayList<>(titles.keySet());
-        keys.sort(Comparator.comparingInt((String k) -> k.equals("minecraft") ? 0 : 1)
+        List<String> sorted = new ArrayList<>(titles.keySet());
+        sorted.sort(Comparator.comparingInt((String k) -> k.equals("minecraft") ? 0 : 1)
                 .thenComparing(k -> titles.get(k).toLowerCase(Locale.ROOT)));
         List<ModTab> tabs = new ArrayList<>();
-        for (String k : keys) {
+        for (String k : sorted) {
             tabs.add(new ModTab(k, titles.get(k), WmiClientIndex.stackFor(firstItem.get(k))));
         }
         modTabsCache = tabs;
-        modTabsSourceSize = all.size();
+        modTabsSource = index;
         return tabs;
     }
 
@@ -463,13 +477,19 @@ final class WmiRightPanel {
      */
     List<CatalogItem> catalogItems(Map<String, Integer> inv, @Nullable String activeStation) {
         RecipeIndex idx = WmiClientIndex.get();
+        modTabs();
         // Onglets masqués : catalogue entier (aperçu de « Paramètres » compris, dessiné avant le panneau)
         String tab = settings.catalogTabs ? selectedTabId : TAB_ALL;
+        // L'inventaire ne compte que pour « !fab » et pour l'ordre d'une machine ouverte : ailleurs, ramasser un
+        // objet ne relance ni la recherche ni le tri
+        boolean usesInventory = (activeStation != null && !activeStation.isBlank())
+                || RecipeIndex.hasCraftableKeyword(searchQuery);
         CatalogKey key = new CatalogKey(idx, searchQuery, tab, settings.catalogSort, settings.hideNoRecipe,
-                activeStation, inv.hashCode());
+                activeStation, usesInventory ? inv.hashCode() : 0);
         if (key.equals(catalogKey)) {
             return catalogCache;
         }
+        long tr = WmiPerf.start();
         List<CatalogItem> allMatched = idx.search(searchQuery, inv, false, activeStation);
         List<CatalogItem> items = new ArrayList<>(allMatched.size());
         for (CatalogItem it : allMatched) {
@@ -489,6 +509,7 @@ final class WmiRightPanel {
         }
         catalogKey = key;
         catalogCache = List.copyOf(items);
+        WmiPerf.stop(WmiPerf.CATALOG_REBUILD, tr);
         return catalogCache;
     }
 
@@ -501,9 +522,11 @@ final class WmiRightPanel {
             int mouseX,
             int mouseY
     ) {
+        long tl = WmiPerf.start();
         Map<String, Integer> inv = o.snapshotPlayerInventory();
         String activeStation = inferWorkstationFromScreen(screen);
         List<CatalogItem> items = catalogItems(inv, activeStation);
+        WmiPerf.stop(WmiPerf.CATALOG_LIST, tl);
 
         int icon = settings.gridIconSize;
         int slotStep = icon + 2;
@@ -559,16 +582,35 @@ final class WmiRightPanel {
         WmiItemPip.drawItem(g, st, x + 1, y + 1, size - 2);
     }
 
+    private @Nullable AbstractContainerScreen<?> stationScreen;
+    private @Nullable Component stationTitle;
+    private @Nullable RecipeIndex stationIndex;
+    private @Nullable String stationId;
+
     /**
      * Poste de travail de l'écran ouvert, reconnu de façon générique : l'objet du catalogue dont le nom affiché
      * correspond au titre de l'écran (vrai pour la plupart des machines, de tout mod), sinon le four de Minecraft.
+     * Mémorisé tant que l'écran, son titre et l'index ne changent pas (le parcours du catalogue entier ne se fait
+     * plus à chaque image).
      */
-    String inferWorkstationFromScreen(AbstractContainerScreen<?> screen) {
-        String normTitle = CatalogItem.normalize(screen.getTitle().getString());
+    @Nullable String inferWorkstationFromScreen(AbstractContainerScreen<?> screen) {
+        Component title = screen.getTitle();
+        RecipeIndex index = WmiClientIndex.get();
+        if (screen != stationScreen || title != stationTitle || index != stationIndex) {
+            stationId = findWorkstation(index, title);
+            stationScreen = screen;
+            stationTitle = title;
+            stationIndex = index;
+        }
+        return stationId;
+    }
+
+    private static @Nullable String findWorkstation(RecipeIndex index, Component title) {
+        String normTitle = CatalogItem.normalize(title.getString());
         if (normTitle.isBlank()) {
             return null;
         }
-        for (CatalogItem it : WmiClientIndex.get().allItems()) {
+        for (CatalogItem it : index.allItems()) {
             if (it.normalizedName().equals(normTitle)) {
                 return it.id();
             }

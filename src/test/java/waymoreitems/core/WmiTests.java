@@ -810,6 +810,26 @@ public final class WmiTests {
         check("couleur : aller-retour TSV sans perte", ThemePalette.hsvToRgb(hsv[0], hsv[1], hsv[2]) == 0x3366CC);
     }
 
+    private static void testTimingStats() {
+        TimingStats t = new TimingStats();
+        check("mesures : vide, tout a zero", t.count() == 0 && t.meanMillis() == 0 && t.percentileMillis(95) == 0);
+        for (int i = 1; i <= 100; i++) {
+            t.add(i * 1_000_000L);
+        }
+        check("mesures : nombre, moyenne et maximum", t.count() == 100 && Math.abs(t.meanMillis() - 50.5) < 1e-9
+                && t.maxMillis() == 100.0);
+        check("mesures : mediane et 95e centile", t.percentileMillis(50) == 50.0 && t.percentileMillis(95) == 95.0);
+        t.add(-5);
+        check("mesures : duree negative ignoree", t.count() == 100);
+        for (int i = 0; i < TimingStats.CAPACITY; i++) {
+            t.add(2_000_000L);
+        }
+        check("mesures : centiles sur les dernieres valeurs, maximum sur toutes",
+                t.percentileMillis(95) == 2.0 && t.maxMillis() == 100.0);
+        t.reset();
+        check("mesures : remise a zero", t.count() == 0 && t.maxMillis() == 0 && t.summary().startsWith("n=0 "));
+    }
+
     public static void main(String[] args) {
         RecipeIndex index = new RecipeIndex(sampleItems(), sampleRecipes());
         testSearchAndFilters(index);
@@ -826,6 +846,7 @@ public final class WmiTests {
         testWmiRegistryLayouts();
         testPinRecipeInputs();
         testThemePalette();
+        testTimingStats();
         GuiLayoutTests.run(WmiTests::check);
         LangTests.run(WmiTests::check);
 

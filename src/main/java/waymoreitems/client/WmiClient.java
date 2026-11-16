@@ -100,7 +100,8 @@ public final class WmiClient {
 
     /**
      * Commandes client du concepteur d'interfaces : {@code /wmi releve} (relevé de la prochaine image d'un écran à
-     * inventaire) et {@code /wmi mise_en_page} (relecture immédiate de {@code config/wmi-layout.json}).
+     * inventaire) et {@code /wmi mise_en_page} (relecture immédiate de {@code config/wmi-layout.json}) ; mesures de
+     * performance : {@code /wmi perf} (bascule) et {@code /wmi perf index} (reconstruction de l'index chronométrée).
      */
     private static void registerClientCommands(RegisterClientCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("wmi")
@@ -116,7 +117,22 @@ public final class WmiClient {
                         ctx.getSource().sendSuccess(() -> WmiText.c("wmi.cmd.prefix", msg), false);
                     }
                     return 1;
-                })));
+                }))
+                // Mesures de performance (développement) : bascule, puis reconstruction de l'index chronométrée
+                .then(Commands.literal("perf").executes(ctx -> {
+                    boolean on = !WmiPerf.enabled();
+                    WmiPerf.setEnabled(on);
+                    ctx.getSource().sendSuccess(() -> WmiText.c(on ? "wmi.cmd.perf_on" : "wmi.cmd.perf_off"), false);
+                    return 1;
+                })
+                        .then(Commands.literal("index").executes(ctx -> {
+                            if (!WmiPerf.enabled()) {
+                                WmiPerf.setEnabled(true);
+                            }
+                            WmiClientIndex.rebuildNow();
+                            ctx.getSource().sendSuccess(() -> WmiText.c("wmi.cmd.perf_index"), false);
+                            return 1;
+                        }))));
     }
 
     private static void registerHudLayer(RegisterGuiLayersEvent event) {

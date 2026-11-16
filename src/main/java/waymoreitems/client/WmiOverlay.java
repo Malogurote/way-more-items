@@ -21,7 +21,10 @@ import waymoreitems.client.WmiButtons.QuickButton;
 import waymoreitems.core.GuiLayout;
 import waymoreitems.core.PinnedChecklist;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -210,12 +213,26 @@ public final class WmiOverlay {
         return hasAdminRights(mc) || (mc.player != null && mc.player.isCreative() && WmiNetwork.serverHasWmi());
     }
 
+    private @Nullable Inventory snapshotSource;
+    private long snapshotGameTime = Long.MIN_VALUE;
+    private int snapshotTimesChanged = -1;
+    private Map<String, Integer> snapshot = Map.of();
+
+    /**
+     * Contenu de l'inventaire du joueur ({@code objet -> quantité}, non modifiable). Relu au plus une fois par tick
+     * de jeu, ou plus tôt si l'inventaire signale un changement : la surcouche le demande à chaque image.
+     */
     public Map<String, Integer> snapshotPlayerInventory() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
+            snapshotSource = null;
             return Map.of();
         }
         Inventory inv = mc.player.getInventory();
+        long gameTime = mc.level != null ? mc.level.getGameTime() : Long.MIN_VALUE + 1;
+        if (inv == snapshotSource && gameTime == snapshotGameTime && inv.getTimesChanged() == snapshotTimesChanged) {
+            return snapshot;
+        }
         Map<String, Integer> map = new HashMap<>();
         for (int i = 0; i < inv.getContainerSize(); i++) {
             ItemStack st = inv.getItem(i);
@@ -224,7 +241,11 @@ public final class WmiOverlay {
                 map.merge(id, st.getCount(), Integer::sum);
             }
         }
-        return map;
+        snapshotSource = inv;
+        snapshotGameTime = gameTime;
+        snapshotTimesChanged = inv.getTimesChanged();
+        snapshot = Collections.unmodifiableMap(map);
+        return snapshot;
     }
 
     public void giveItemToPlayer(String itemId, int count) {
@@ -285,6 +306,20 @@ public final class WmiOverlay {
     // ==================== SUPERPOSITION SUR LES CONTENEURS / INVENTAIRE ====================
 
     public void renderContainerOverlay(AbstractContainerScreen<?> screen, GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        if (!WmiPerf.enabled()) {
+            renderContainerOverlayBody(screen, g, mouseX, mouseY);
+            return;
+        }
+        WmiPerf.frame(!visible ? "hidden" : jeiModeActive() ? "JEI" : "WMI");
+        long t = WmiPerf.start();
+        try {
+            renderContainerOverlayBody(screen, g, mouseX, mouseY);
+        } finally {
+            WmiPerf.stop(WmiPerf.OVERLAY, t);
+        }
+    }
+
+    private void renderContainerOverlayBody(AbstractContainerScreen<?> screen, GuiGraphicsExtractor g, int mouseX, int mouseY) {
         panel.hoveredOverlayItemId = null;
         input.syncTextInput(screen);
         buttons.drawn.clear();
@@ -378,7 +413,9 @@ public final class WmiOverlay {
         if (jeiModeActive()) {
             panel.bounds = null;
         } else if (lay.drawable("rightPanel")) {
+            long tp = WmiPerf.start();
             panel.renderRightBinder(screen, g, font, rp.x(), rp.y(), rp.w(), rp.h(), mouseX, mouseY);
+            WmiPerf.stop(WmiPerf.RIGHT_PANEL, tp);
             rightDrawn = true;
         }
 
