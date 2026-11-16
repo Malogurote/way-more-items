@@ -91,6 +91,8 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
     private boolean quickNoteFocused = false;
 
     private String hoveredItemId;
+    /** Quantité de la case survolée (millibuckets pour un fluide), 0 si inconnue. */
+    private int hoveredAmount;
     private final List<ClickableZone> clickZones = new ArrayList<>();
 
     private record ClickableZone(int x, int y, int w, int h, Runnable action) {
@@ -216,6 +218,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             graphics.fill(0, 0, width, height, 0x550F172A);
         }
         hoveredItemId = null;
+        hoveredAmount = 0;
         clickZones.clear();
 
         // Saisie de texte du système (SDL3) : sans startTextInput, aucun caractère n'arrive à charTyped.
@@ -271,6 +274,8 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             ItemStack st = WmiClientIndex.stackFor(hoveredItemId);
             if (!st.isEmpty()) {
                 WmiNames.tooltip(graphics, font, st, mouseX, mouseY);
+            } else {
+                WmiFluids.tooltip(graphics, font, hoveredItemId, hoveredAmount, mouseX, mouseY);
             }
         }
     }
@@ -297,12 +302,14 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         ItemStack targetStack = WmiClientIndex.stackFor(targetItemId);
         if (!targetStack.isEmpty()) {
             g.fakeItem(targetStack, x0 + 6, y0 + 5);
+        } else {
+            WmiFluids.draw(g, targetItemId, x0 + 6, y0 + 5, 16);
         }
         // Titre « Recettes » ou « Usages » en grand, texte simple au-dessus du coin gauche de la fenêtre
         // (fond toujours assombri derrière l'écran : texte clair quel que soit le thème)
         String modeLabel = WmiText.s(mode == ViewMode.RECIPES ? "gui.wmi.mode.recipes" : "gui.wmi.mode.uses");
         WmiDraw.drawBigText(g, font, modeLabel, x0 + 2, y0 - 16, 0xFFF1F5F9);
-        String itemName = !targetStack.isEmpty() ? WmiNames.of(targetStack) : targetItemId;
+        String itemName = !targetStack.isEmpty() ? WmiNames.of(targetStack) : WmiFluids.displayName(targetItemId);
         WmiDraw.drawText(g, font, trimToWidth(itemName, boxW - 122), x0 + 25, y0 + 9, th.textMain);
 
         int btnRight = x0 + boxW - 6;
@@ -555,9 +562,12 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
                 ItemStack withCount = count > 1 ? st.copyWithCount(count) : st;
                 g.fakeItem(withCount, x, y);
                 g.itemDecorations(font, withCount, x, y);
+            } else if (WmiFluids.draw(g, itemId, x, y, 16)) {
+                WmiFluids.drawAmount(g, font, count, x, y);
             }
             if (hover) {
                 hoveredItemId = itemId;
+                hoveredAmount = count;
             }
         }
     }
@@ -602,9 +612,11 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         ItemStack targetStack = WmiClientIndex.stackFor(targetItemId);
         if (!targetStack.isEmpty()) {
             g.fakeItem(targetStack, x0 + 7, y0 + 6);
+        } else {
+            WmiFluids.draw(g, targetItemId, x0 + 7, y0 + 6, 16);
         }
         drawSideTabs(g, x0, y0, boxW, boxH, mouseX, mouseY);
-        String targetName = !targetStack.isEmpty() ? WmiNames.of(targetStack) : targetItemId;
+        String targetName = !targetStack.isEmpty() ? WmiNames.of(targetStack) : WmiFluids.displayName(targetItemId);
         // Bouton Fermer à droite de l'en-tête, comme dans la fenêtre des recettes ; compteur de quantité à sa gauche
         int closeX = x0 + boxW - 6 - 14;
         int closeY = y0 + 7;
@@ -748,9 +760,12 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             ItemStack withCount = count > 1 ? st.copyWithCount(Math.min(count, 999)) : st;
             g.fakeItem(withCount, x + 2, y + 2);
             g.itemDecorations(font, withCount, x + 2, y + 2);
+        } else if (WmiFluids.draw(g, itemId, x + 2, y + 2, 16)) {
+            WmiFluids.drawAmount(g, font, count, x + 2, y + 2);
         }
         if (hover) {
             hoveredItemId = itemId;
+            hoveredAmount = count;
         }
     }
 
@@ -943,8 +958,9 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         sideTab(g, th, tx, treeY, size, size, new ItemStack(net.minecraft.world.item.Items.CRAFTING_TABLE), treeActive, false,
                 List.of(WmiText.c("gui.wmi.btn.tree")), mouseX, mouseY,
                 () -> navigateTo(treeActive ? ViewMode.RECIPES : ViewMode.CRAFT_TREE, targetItemId));
-        if (canGive) {
-            ItemStack st = WmiClientIndex.stackFor(targetItemId);
+        String giveId = WmiFluids.giveTarget(targetItemId);
+        if (canGive && giveId != null) {
+            ItemStack st = WmiClientIndex.stackFor(giveId);
             int count = st.isEmpty() ? 64 : Math.max(1, Math.min(64, st.getMaxStackSize()));
             List<Component> tip = List.of(WmiText.c("wmi.recipe.give_count", count),
                     WmiText.c("wmi.recipe.give_tip").withStyle(net.minecraft.ChatFormatting.GRAY));
@@ -1227,6 +1243,8 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             ItemStack st = WmiClientIndex.stackFor(id);
             if (!st.isEmpty()) {
                 WmiDraw.drawSmallItem(g, st, sx, ry, 12);
+            } else {
+                WmiFluids.draw(g, id, sx, ry, 12);
             }
             if (hover) {
                 hovered = id;
@@ -1260,6 +1278,8 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             ItemStack st = WmiClientIndex.stackFor(hovered);
             if (!st.isEmpty()) {
                 WmiNames.tooltip(g, font, st, mouseX, mouseY);
+            } else {
+                WmiFluids.tooltip(g, font, hovered, 0, mouseX, mouseY);
             }
         }
     }

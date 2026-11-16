@@ -145,6 +145,8 @@ public final class WmiSettings {
     boolean catalogTabs = true;
     CatalogSort catalogSort = CatalogSort.MOD;
     boolean hideNoRecipe = false;
+    /** Fluides seulement dans l'onglet « Fluides » du catalogue. */
+    boolean hideFluids = false;
     /** Recherche du catalogue effacée au retour au jeu (sinon gardée jusqu'à la fermeture du jeu). */
     boolean clearSearchOnClose = false;
     TimeFormat timeFormat = TimeFormat.LANGUAGE;
@@ -257,6 +259,7 @@ public final class WmiSettings {
         catalogTabs = props.bool("catalogTabs", true);
         catalogSort = props.enumValue("catalogSort", CatalogSort.class, CatalogSort.MOD);
         hideNoRecipe = props.bool("hideNoRecipe", false);
+        hideFluids = props.bool("hideFluids", false);
         clearSearchOnClose = props.bool("clearSearchOnClose", false);
         timeFormat = props.enumValue("timeFormat", TimeFormat.class, TimeFormat.LANGUAGE);
         nightAlert = props.bool("nightAlert", false);
@@ -315,6 +318,7 @@ public final class WmiSettings {
         props.setProperty("catalogTabs", Boolean.toString(catalogTabs));
         props.setProperty("catalogSort", catalogSort.name());
         props.setProperty("hideNoRecipe", Boolean.toString(hideNoRecipe));
+        props.setProperty("hideFluids", Boolean.toString(hideFluids));
         props.setProperty("clearSearchOnClose", Boolean.toString(clearSearchOnClose));
         props.setProperty("timeFormat", timeFormat.name());
         props.setProperty("nightAlert", Boolean.toString(nightAlert));

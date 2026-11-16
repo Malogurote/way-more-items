@@ -71,6 +71,14 @@ public record CatalogItem(
         }
     }
 
+    /** Catégorie de tri des fluides du catalogue. */
+    public static final String FLUID_CATEGORY = "fluids";
+
+    /** Vrai si cette fiche désigne un fluide (clé {@code "fluid@..."}). */
+    public boolean isFluid() {
+        return IngredientRef.isFluid(id);
+    }
+
     private static Set<String> normalizeTagSet(Set<String> raw) {
         if (raw == null || raw.isEmpty()) {
             return Set.of();

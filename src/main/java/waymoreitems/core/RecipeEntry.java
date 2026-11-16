@@ -36,6 +36,16 @@ public record RecipeEntry(
         long totalEnergy,
         List<Integer> inputCells
 ) {
+    /** Type des pseudo-recettes « remplir un contenant » (seau vide + fluide -> seau plein). */
+    public static final String FLUID_FILLING_TYPE = "wmi:fluid_filling";
+    /** Type des pseudo-recettes « vider un contenant » (seau plein -> seau vide + fluide). */
+    public static final String FLUID_EMPTYING_TYPE = "wmi:fluid_emptying";
+
+    /** Vrai pour une pseudo-recette de remplissage ou de vidange de contenant, que l'arbre de fabrication ignore. */
+    public boolean isFluidContainerRecipe() {
+        return FLUID_FILLING_TYPE.equals(typeId) || FLUID_EMPTYING_TYPE.equals(typeId);
+    }
+
     /** Largeur de la grille d'artisanat dans laquelle {@link #inputCells} sont numérotées. */
     public static final int GRID_WIDTH = 3;
 
@@ -110,6 +120,24 @@ public record RecipeEntry(
             this(alternatives, count, "");
         }
 
+        /**
+         * Case de fluide : {@code fluidIds} sont des identifiants de registre de fluides (sans genre), convertis en
+         * clés {@link IngredientRef#fluidKey}, et {@code millibuckets} la quantité requise.
+         */
+        public static IngredientSlot fluids(List<String> fluidIds, int millibuckets, String tagId) {
+            Objects.requireNonNull(fluidIds, "fluidIds");
+            List<String> keys = new java.util.ArrayList<>(fluidIds.size());
+            for (String f : fluidIds) {
+                keys.add(IngredientRef.isFluid(f) ? f : IngredientRef.fluidKey(f));
+            }
+            return new IngredientSlot(keys, millibuckets, tagId);
+        }
+
+        /** Vrai si cette case accepte des fluides (genre de sa première alternative). */
+        public boolean isFluid() {
+            return IngredientRef.isFluid(alternatives.get(0));
+        }
+
         public IngredientSlot {
             Objects.requireNonNull(alternatives, "alternatives");
             if (alternatives.isEmpty()) {
@@ -136,6 +164,17 @@ public record RecipeEntry(
             if (count < 1) {
                 throw new IllegalArgumentException("count < 1: " + count);
             }
+        }
+
+        /** Quantité de fluide : {@code fluidId} sans genre (ou clé déjà formée), {@code millibuckets} en mB. */
+        public static ItemAmount fluid(String fluidId, int millibuckets) {
+            Objects.requireNonNull(fluidId, "fluidId");
+            return new ItemAmount(IngredientRef.isFluid(fluidId) ? fluidId : IngredientRef.fluidKey(fluidId), millibuckets);
+        }
+
+        /** Vrai si ce résultat est un fluide. */
+        public boolean isFluid() {
+            return IngredientRef.isFluid(itemId);
         }
     }
 

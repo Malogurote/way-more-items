@@ -208,23 +208,36 @@ public final class RecipeIndex {
 
     /** Vrai si la recherche contient le mot {@link #CRAFTABLE_KEYWORD} (seul, sans tenir compte de la casse). */
     public static boolean hasCraftableKeyword(String query) {
+        return hasKeyword(query, CRAFTABLE_KEYWORD);
+    }
+
+    /** La recherche sans le mot {@link #CRAFTABLE_KEYWORD}. */
+    public static String stripCraftableKeyword(String query) {
+        return stripKeyword(query, CRAFTABLE_KEYWORD);
+    }
+
+    /** Mot-clé de recherche qui ne retient que les fluides. */
+    public static final String FLUID_KEYWORD = "!fluid";
+
+    /** Vrai si la recherche contient le mot-clé {@code keyword} (seul, sans tenir compte de la casse). */
+    public static boolean hasKeyword(String query, String keyword) {
         if (query == null) {
             return false;
         }
         for (String w : query.trim().split("[\\s|]+")) {
-            if (w.equalsIgnoreCase(CRAFTABLE_KEYWORD)) {
+            if (w.equalsIgnoreCase(keyword)) {
                 return true;
             }
         }
         return false;
     }
 
-    /** La recherche sans le mot {@link #CRAFTABLE_KEYWORD}. */
-    public static String stripCraftableKeyword(String query) {
+    /** La recherche sans le mot-clé {@code keyword}. */
+    public static String stripKeyword(String query, String keyword) {
         if (query == null) {
             return "";
         }
-        return query.replaceAll("(?i)(^|(?<=[\\s|]))" + java.util.regex.Pattern.quote(CRAFTABLE_KEYWORD) + "(?=$|[\\s|])", "").trim();
+        return query.replaceAll("(?i)(^|(?<=[\\s|]))" + java.util.regex.Pattern.quote(keyword) + "(?=$|[\\s|])", "").trim();
     }
 
     /**
@@ -247,10 +260,17 @@ public final class RecipeIndex {
             onlyCraftable = true;
             q = stripCraftableKeyword(q);
         }
+        boolean onlyFluids = hasKeyword(q, FLUID_KEYWORD);
+        if (onlyFluids) {
+            q = stripKeyword(q, FLUID_KEYWORD);
+        }
         List<List<Token>> branches = parseQuery(q);
 
         List<CatalogItem> matched = new ArrayList<>();
         for (CatalogItem item : items) {
+            if (onlyFluids && !item.isFluid()) {
+                continue;
+            }
             if (!matchesBranches(item, branches)) {
                 continue;
             }
@@ -305,6 +325,38 @@ public final class RecipeIndex {
             }
         }
         return prioritized;
+    }
+
+    /**
+     * Fluides contenus dans les objets de {@code inv} (seaux pleins, etc.), déduits des pseudo-recettes de vidange
+     * ({@link RecipeEntry#FLUID_EMPTYING_TYPE}) : {@code cléFluide -> mB}. Un objet vidable de plusieurs façons ne
+     * compte que pour la première.
+     */
+    public Map<String, Integer> fluidsInContainers(Map<String, Integer> inv) {
+        if (inv == null || inv.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Integer> out = new LinkedHashMap<>();
+        for (Map.Entry<String, Integer> e : inv.entrySet()) {
+            int n = e.getValue() == null ? 0 : e.getValue();
+            if (n <= 0 || !IngredientRef.isItem(e.getKey())) {
+                continue;
+            }
+            for (RecipeEntry r : recipesUsing(e.getKey())) {
+                if (!RecipeEntry.FLUID_EMPTYING_TYPE.equals(r.typeId()) || r.inputs().size() != 1
+                        || !r.inputs().get(0).matches(e.getKey())) {
+                    continue;
+                }
+                int runs = n / r.inputs().get(0).count();
+                for (RecipeEntry.ItemAmount o : r.outputs()) {
+                    if (o.isFluid() && runs > 0) {
+                        out.merge(o.itemId(), (int) Math.min(Integer.MAX_VALUE, (long) runs * o.count()), Integer::sum);
+                    }
+                }
+                break;
+            }
+        }
+        return out;
     }
 
     /**

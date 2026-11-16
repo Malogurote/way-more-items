@@ -315,6 +315,8 @@ public final class WmiClientIndex {
                 if (itemPos < itemRefs.size()) {
                     return;
                 }
+                // Fluides après les objets (onglet « Fluides » et mot-clé !fluid)
+                catalog.addAll(WmiFluids.buildCatalog(modNames));
                 phase = RECIPES;
             }
             if (phase == RECIPES) {
@@ -334,6 +336,11 @@ public final class WmiClientIndex {
             if (phase == EXTRACTORS) {
                 long t = System.nanoTime();
                 recipesRead = entries.size();
+                // Remplissage et vidange des seaux de fluide
+                try {
+                    entries.addAll(WmiFluids.containerRecipes());
+                } catch (Exception ignored) {
+                }
                 for (WmiRegistry.CustomRecipeExtractor ext : WmiRegistry.extractors()) {
                     try {
                         List<RecipeEntry> custom = ext.extractRecipes();
@@ -670,10 +677,16 @@ public final class WmiClientIndex {
             return null;
         }
         List<ItemStack> outStacks = resultSlot.resolveForStacks(context);
+        RecipeEntry.ItemAmount out;
         if (outStacks.isEmpty()) {
-            return null;
+            RecipeEntry.IngredientSlot fluidOut = fluidSlot(resultSlot, context);
+            if (fluidOut == null) {
+                return null;
+            }
+            out = new RecipeEntry.ItemAmount(fluidOut.alternatives().get(0), fluidOut.count());
+        } else {
+            out = fromResultStack(outStacks.get(0));
         }
-        RecipeEntry.ItemAmount out = fromResultStack(outStacks.get(0));
         if (out == null) {
             return null;
         }
@@ -696,6 +709,10 @@ public final class WmiClientIndex {
         }
         List<ItemStack> stacks = sd.resolveForStacks(context);
         if (stacks.isEmpty()) {
+            RecipeEntry.IngredientSlot fluid = fluidSlot(sd, context);
+            if (fluid != null) {
+                target.add(fluid);
+            }
             return;
         }
         List<String> alts = new ArrayList<>();
@@ -712,6 +729,29 @@ public final class WmiClientIndex {
         if (!alts.isEmpty()) {
             target.add(new RecipeEntry.IngredientSlot(alts, count));
         }
+    }
+
+    /** Lecteur des cases de fluide de NeoForge ({@code FluidSlotDisplay} et dérivés). */
+    private static final net.neoforged.neoforge.fluids.crafting.display.ForFluidStacks<net.neoforged.neoforge.fluids.FluidStack>
+            FLUID_STACKS = stack -> stack;
+
+    /** Fluides d'une case d'affichage, ou {@code null} si elle n'en contient pas. */
+    private static RecipeEntry.@org.jspecify.annotations.Nullable IngredientSlot fluidSlot(SlotDisplay sd, ContextMap context) {
+        List<String> alts = new ArrayList<>();
+        int amount = 0;
+        try {
+            for (net.neoforged.neoforge.fluids.FluidStack fs : sd.resolve(context, FLUID_STACKS).toList()) {
+                if (fs != null && !fs.isEmpty()) {
+                    String id = BuiltInRegistries.FLUID.getKey(fs.getFluid()).toString();
+                    if (!alts.contains(id)) {
+                        alts.add(id);
+                    }
+                    amount = Math.max(amount, fs.getAmount());
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return alts.isEmpty() ? null : RecipeEntry.IngredientSlot.fluids(alts, Math.max(1, amount), "");
     }
 
     private static RecipeEntry convertReflective(

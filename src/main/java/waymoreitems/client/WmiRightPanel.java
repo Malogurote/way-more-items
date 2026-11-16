@@ -65,6 +65,8 @@ import static waymoreitems.client.WmiDraw.*;
 final class WmiRightPanel {
 
     private static final String TAB_ALL = "all";
+    /** Onglet des fluides (hors des onglets de mods, l'identifiant ne peut être un espace de noms). */
+    private static final String TAB_FLUIDS = "@fluids";
     private static final int DELETE_BORDER_RED = 0xFFEF4444;
 
     private final WmiOverlay o;
@@ -241,6 +243,10 @@ final class WmiRightPanel {
         if (TAB_ALL.equals(selectedTabId)) {
             items = countsItems;
             recipes = countsRecipes;
+        } else if (TAB_FLUIDS.equals(selectedTabId)) {
+            countFluids();
+            items = fluidItems;
+            recipes = fluidRecipes;
         } else {
             int[] c = tabCounts.getOrDefault(selectedTabId, new int[2]);
             items = c[0];
@@ -302,7 +308,8 @@ final class WmiRightPanel {
         }
 
         // 2. Sous-en-tête : titre de l'onglet actif et bascule du clic (Donner ou Recette)
-        String activeTitle = TAB_ALL.equals(selectedTabId) ? WmiText.s("wmi.tabs.all_items") : tabs.stream()
+        String activeTitle = TAB_ALL.equals(selectedTabId) ? WmiText.s("wmi.tabs.all_items")
+                : TAB_FLUIDS.equals(selectedTabId) ? WmiText.s("wmi.tabs.fluids") : tabs.stream()
                 .filter(t -> t.id().equals(selectedTabId)).map(ModTab::title).findFirst().orElse(WmiText.s("wmi.tabs.all_items"));
         int modeBtnW = 0;
         int lastModeY = 0;
@@ -359,7 +366,7 @@ final class WmiRightPanel {
                     WmiText.s("wmi.search.placeholder"), searchBorder);
         }
         o.buttons.drawn.add(new QuickButton(searchX, searchY, searchW, searchH, "",
-                WmiText.s("wmi.search.tip", RecipeIndex.CRAFTABLE_KEYWORD), () -> {
+                WmiText.s("wmi.search.tip", RecipeIndex.CRAFTABLE_KEYWORD, RecipeIndex.FLUID_KEYWORD), () -> {
             long now = System.currentTimeMillis();
             if (now - lastSearchClickTime < 300L) {
                 highlightChestMode = !highlightChestMode;
@@ -395,6 +402,17 @@ final class WmiRightPanel {
                     currentPage = 0;
                 });
         int rowLeft = x + allW + 2;
+        // Onglet des fluides, à la suite de « Tous », s'il y en a dans le catalogue
+        if (hasFluids()) {
+            drawCreativeTabButton(g, font, rowLeft, y, tabW, h, new ItemStack(Items.WATER_BUCKET), "",
+                    WmiText.s("wmi.tabs.fluids"), TAB_FLUIDS.equals(selectedTabId), false, mouseX, mouseY, () -> {
+                        selectedTabId = TAB_FLUIDS;
+                        currentPage = 0;
+                    });
+            rowLeft += tabW + 2;
+        } else if (TAB_FLUIDS.equals(selectedTabId)) {
+            selectedTabId = TAB_ALL;
+        }
         int rowRight = x + w;
         int needed = tabs.size() * (tabW + 2);
         boolean overflow = needed > rowRight - rowLeft;
@@ -464,7 +482,37 @@ final class WmiRightPanel {
 
     /** Clé de la dernière liste du catalogue : tant qu'elle ne change pas, la recherche et le tri ne sont pas refaits. */
     private record CatalogKey(RecipeIndex index, String query, String tab, WmiSettings.CatalogSort sort,
-                              boolean hideNoRecipe, @Nullable String station, int inventoryHash) {
+                              boolean hideNoRecipe, boolean hideFluids, @Nullable String station, int inventoryHash) {
+    }
+
+    private @Nullable RecipeIndex fluidCountIndex;
+    private int fluidItems;
+    private int fluidRecipes;
+
+    /** Nombre de fluides du catalogue et de recettes qui en emploient ou en produisent (recalculés par index). */
+    private void countFluids() {
+        RecipeIndex idx = WmiClientIndex.get();
+        if (idx == fluidCountIndex) {
+            return;
+        }
+        int items = 0;
+        java.util.Set<String> recipes = new java.util.HashSet<>();
+        for (CatalogItem it : idx.allItems()) {
+            if (it.isFluid()) {
+                items++;
+                idx.recipesForOutput(it.id()).forEach(r -> recipes.add(r.id()));
+                idx.recipesUsing(it.id()).forEach(r -> recipes.add(r.id()));
+            }
+        }
+        fluidItems = items;
+        fluidRecipes = recipes.size();
+        fluidCountIndex = idx;
+    }
+
+    /** Vrai si le catalogue contient au moins un fluide. */
+    boolean hasFluids() {
+        countFluids();
+        return fluidItems > 0;
     }
 
     private @Nullable CatalogKey catalogKey;
@@ -485,7 +533,7 @@ final class WmiRightPanel {
         boolean usesInventory = (activeStation != null && !activeStation.isBlank())
                 || RecipeIndex.hasCraftableKeyword(searchQuery);
         CatalogKey key = new CatalogKey(idx, searchQuery, tab, settings.catalogSort, settings.hideNoRecipe,
-                activeStation, usesInventory ? inv.hashCode() : 0);
+                settings.hideFluids, activeStation, usesInventory ? inv.hashCode() : 0);
         if (key.equals(catalogKey)) {
             return catalogCache;
         }
@@ -493,7 +541,13 @@ final class WmiRightPanel {
         List<CatalogItem> allMatched = idx.search(searchQuery, inv, false, activeStation);
         List<CatalogItem> items = new ArrayList<>(allMatched.size());
         for (CatalogItem it : allMatched) {
-            if (!TAB_ALL.equals(tab) && !tabKey(it.namespace()).equals(tab)) {
+            if (TAB_FLUIDS.equals(tab)) {
+                if (!it.isFluid()) {
+                    continue;
+                }
+            } else if (!TAB_ALL.equals(tab) && !tabKey(it.namespace()).equals(tab)) {
+                continue;
+            } else if (settings.hideFluids && it.isFluid()) {
                 continue;
             }
             if (settings.hideNoRecipe && idx.recipesForOutput(it.id()).isEmpty()) {
@@ -570,13 +624,18 @@ final class WmiRightPanel {
     /** Case du catalogue de {@code size} unités ; l'objet est mis à l'échelle (indépendant de l'échelle d'interface). */
     void drawFloatingCatalogSlot(GuiGraphicsExtractor g, int x, int y, int size, String itemId, int mouseX, int mouseY) {
         ItemStack st = WmiClientIndex.stackFor(itemId);
-        if (st.isEmpty()) {
+        boolean fluid = st.isEmpty() && WmiFluids.fluid(itemId) != null;
+        if (st.isEmpty() && !fluid) {
             return;
         }
         boolean hover = mouseX >= x && mouseX < x + size && mouseY >= y && mouseY < y + size;
         drawBox(g, x, y, size, size, hover ? theme().slotHover : theme().slotBg, hover ? theme().accent : theme().innerBorder);
         if (hover) {
             hoveredOverlayItemId = itemId;
+        }
+        if (fluid) {
+            WmiFluids.draw(g, itemId, x + 1, y + 1, size - 2);
+            return;
         }
         // Au-delà de 16 unités, rendu net à la taille de la case (l'atlas des objets est limité à 16 unités)
         WmiItemPip.drawItem(g, st, x + 1, y + 1, size - 2);
