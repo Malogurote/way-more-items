@@ -250,6 +250,13 @@ public final class WmiClientIndex {
             }
         }
 
+        // Source externe (navigateur de recettes installé à côté) : seulement les recettes que WMI n'a pas lues
+        java.util.Set<String> knownIds = new java.util.HashSet<>();
+        for (RecipeEntry e : entries) {
+            knownIds.add(e.id());
+        }
+        entries.addAll(WmiExternalSources.importRecipes(knownIds).recipes());
+
         currentIndex = new RecipeIndex(catalog, entries);
         currentCreativeTabs = buildCreativeTabs(mc);
         builtWithBoundTags = tagsBound;

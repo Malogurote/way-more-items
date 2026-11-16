@@ -379,7 +379,10 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         WmiTheme th = theme();
         WmiDraw.drawFrostedCard(g, cx, cy, cw, ch);
 
-        RecipeLayoutSpec layout = WmiRegistry.layout(rec.typeId());
+        RecipeLayoutSpec layout = WmiExternalSources.layoutFor(rec.id());
+        if (layout == null) {
+            layout = WmiRegistry.layout(rec.typeId());
+        }
         long tick = System.currentTimeMillis() / 1000L;
 
         if (layout != null && !layout.slots().isEmpty()) {
