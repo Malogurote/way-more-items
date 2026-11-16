@@ -41,7 +41,6 @@ import waymoreitems.core.ThemePalette;
 import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -74,21 +73,8 @@ final class WmiVanillaBook {
     }
 
     RecipeBookComponent<?> extractRecipeBookComponent(Screen screen) {
-        if (!(screen instanceof AbstractRecipeBookScreen<?> rbs)) {
-            return null;
-        }
-        for (Class<?> c = rbs.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
-            for (Field f : c.getDeclaredFields()) {
-                if (RecipeBookComponent.class.isAssignableFrom(f.getType())) {
-                    try {
-                        f.setAccessible(true);
-                        return (RecipeBookComponent<?>) f.get(rbs);
-                    } catch (Throwable ignored) {
-                    }
-                }
-            }
-        }
-        return null;
+        // Champ ouvert par le transformateur d'accès (META-INF/accesstransformer.cfg)
+        return screen instanceof AbstractRecipeBookScreen<?> rbs ? rbs.recipeBookComponent : null;
     }
 
     ImageButton findVanillaRecipeBookButton(Screen screen) {

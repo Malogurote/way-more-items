@@ -828,6 +828,7 @@ public final class WmiTests {
         testThemePalette();
         GuiLayoutTests.run(WmiTests::check);
         LangTests.run(WmiTests::check);
+        CoreLogicTests.run(WmiTests::check);
 
         System.out.println("WmiTests : " + checks + " verifications, " + failures + " echec(s).");
         if (failures > 0) {

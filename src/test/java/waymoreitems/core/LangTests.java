@@ -13,11 +13,13 @@ import java.util.stream.Stream;
 
 /**
  * Contrôle des fichiers de langue (Java pur) : mêmes clés dans tous les fichiers de langue que {@code en_us} (référence), aucune valeur vide,
- * mêmes paramètres de format, et toute clé citée dans le code existe. Lancé depuis la racine du dépôt.
+ * mêmes paramètres de format, et toute clé citée dans le code existe. Fichiers lus depuis la racine du projet.
  */
 final class LangTests {
-    private static final Path LANG = Path.of("src/main/resources/assets/wmi/lang");
-    private static final Path SRC = Path.of("src/main/java");
+    /** Racine du projet : propriété système {@code wmi.projectDir} (posée par la tâche Gradle), sinon le dossier courant. */
+    private static final Path ROOT = Path.of(System.getProperty("wmi.projectDir", "."));
+    private static final Path LANG = ROOT.resolve("src/main/resources/assets/wmi/lang");
+    private static final Path SRC = ROOT.resolve("src/main/java");
     private static final Pattern CODE_KEY = Pattern.compile("\"((?:gui\\.|key\\.)?wmi\\.[a-z0-9_.]*)\"");
     private static final Pattern FORMAT = Pattern.compile("%(\\d+\\$)?[sd]");
 

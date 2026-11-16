@@ -77,11 +77,15 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
 sourceSets.main.resources.srcDir generateModMetadata
 neoForge.ideSyncTask generateModMetadata
 
-// Tests du noyau de Way More Items en Java pur (sans bibliothèque de test) : gradle wmiTests
+// Tests du noyau de Way More Items en Java pur (sans bibliothèque de test) : gradle wmiTests, lancés aussi par check et build
 tasks.register('wmiTests', JavaExec) {
+    group = 'verification'
+    description = 'Runs the core tests of Way More Items.'
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'waymoreitems.core.WmiTests'
+    systemProperty 'wmi.projectDir', projectDir.absolutePath
 }
+tasks.named('check') { dependsOn 'wmiTests' }
 
 // Cloisonnement : la compilation échoue si le code ou les ressources de WMI contiennent un renvoi interdit
 // (propriété Gradle « wmiForbiddenRefs », mots séparés par des virgules, facultative), ou si le noyau cite Minecraft.
