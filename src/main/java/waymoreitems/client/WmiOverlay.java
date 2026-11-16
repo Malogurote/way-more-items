@@ -230,8 +230,9 @@ public final class WmiOverlay {
     }
 
     public void giveItemToPlayer(String itemId, int count) {
-        // Un fluide ne se donne pas : seuls les objets passent par le serveur
-        if (!waymoreitems.core.IngredientRef.isItem(itemId)) {
+        // Un fluide se donne dans son seau plein (rien s'il n'en a pas) : seuls les objets passent par le serveur
+        itemId = WmiFluids.giveTarget(itemId);
+        if (itemId == null) {
             return;
         }
         // Outils, armes, armures, seaux... : jamais plus que la taille de pile de l'objet (1 pour les non empilables)

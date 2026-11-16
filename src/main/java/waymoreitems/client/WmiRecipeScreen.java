@@ -277,12 +277,14 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         ItemStack targetStack = WmiClientIndex.stackFor(targetItemId);
         if (!targetStack.isEmpty()) {
             g.fakeItem(targetStack, x0 + 6, y0 + 5);
+        } else {
+            WmiFluids.draw(g, targetItemId, x0 + 6, y0 + 5, 16);
         }
         // Titre « Recettes » ou « Usages » en grand, texte simple au-dessus du coin gauche de la fenêtre
         // (fond toujours assombri derrière l'écran : texte clair quel que soit le thème)
         String modeLabel = WmiText.s(mode == ViewMode.RECIPES ? "gui.wmi.mode.recipes" : "gui.wmi.mode.uses");
         WmiDraw.drawBigText(g, font, modeLabel, x0 + 2, y0 - 16, 0xFFF1F5F9);
-        String itemName = !targetStack.isEmpty() ? WmiNames.of(targetStack) : targetItemId;
+        String itemName = !targetStack.isEmpty() ? WmiNames.of(targetStack) : WmiFluids.displayName(targetItemId);
         WmiDraw.drawText(g, font, trimToWidth(itemName, boxW - 122), x0 + 25, y0 + 9, th.textMain);
 
         int btnRight = x0 + boxW - 6;
@@ -605,9 +607,11 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         ItemStack targetStack = WmiClientIndex.stackFor(targetItemId);
         if (!targetStack.isEmpty()) {
             g.fakeItem(targetStack, x0 + 7, y0 + 6);
+        } else {
+            WmiFluids.draw(g, targetItemId, x0 + 7, y0 + 6, 16);
         }
         drawSideTabs(g, x0, y0, boxW, boxH, mouseX, mouseY);
-        String targetName = !targetStack.isEmpty() ? WmiNames.of(targetStack) : targetItemId;
+        String targetName = !targetStack.isEmpty() ? WmiNames.of(targetStack) : WmiFluids.displayName(targetItemId);
         // Bouton Fermer à droite de l'en-tête, comme dans la fenêtre des recettes ; compteur de quantité à sa gauche
         int closeX = x0 + boxW - 6 - 14;
         int closeY = y0 + 7;
@@ -949,8 +953,9 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         sideTab(g, th, tx, treeY, size, size, new ItemStack(net.minecraft.world.item.Items.CRAFTING_TABLE), treeActive, false,
                 List.of(WmiText.c("gui.wmi.btn.tree")), mouseX, mouseY,
                 () -> navigateTo(treeActive ? ViewMode.RECIPES : ViewMode.CRAFT_TREE, targetItemId));
-        if (canGive) {
-            ItemStack st = WmiClientIndex.stackFor(targetItemId);
+        String giveId = WmiFluids.giveTarget(targetItemId);
+        if (canGive && giveId != null) {
+            ItemStack st = WmiClientIndex.stackFor(giveId);
             int count = st.isEmpty() ? 64 : Math.max(1, Math.min(64, st.getMaxStackSize()));
             List<Component> tip = List.of(WmiText.c("wmi.recipe.give_count", count),
                     WmiText.c("wmi.recipe.give_tip").withStyle(net.minecraft.ChatFormatting.GRAY));

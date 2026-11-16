@@ -222,6 +222,26 @@ final class WmiFluids {
         return true;
     }
 
+    /**
+     * Objet à donner pour un ingrédient : le seau plein d'un fluide (rien si le fluide n'a pas de seau), l'objet
+     * lui-même sinon.
+     */
+    static @Nullable String giveTarget(@Nullable String key) {
+        if (key == null || IngredientRef.isItem(key)) {
+            return key;
+        }
+        Fluid f = fluid(key);
+        if (f == null) {
+            return null;
+        }
+        try {
+            Item bucket = f.getBucket();
+            return bucket == null || bucket == Items.AIR ? null : BuiltInRegistries.ITEM.getKey(bucket).toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /** Nom d'un ingrédient (objet ou fluide) pour les listes de texte (Notes, arbre). */
     static String displayName(String key) {
         CatalogItem item = WmiClientIndex.peek().item(key);
