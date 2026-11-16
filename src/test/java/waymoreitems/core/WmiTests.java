@@ -287,6 +287,47 @@ public final class WmiTests {
                         && circuitPlan.missingRaw().getOrDefault("exemplemod:rubber", 0) == 4);
     }
 
+    /**
+     * Cristal récolté dans le monde (cas du certus d'AE2) : ses seules recettes partent de variantes décoratives de
+     * son bloc, elles-mêmes faites de cristaux. L'arbre le traite en matière première au lieu de passer par le bloc.
+     */
+    private static void testRoundTripCrystal() {
+        List<CatalogItem> items = List.of(
+                new CatalogItem("t:crystal", "t", "T", "Cristal", "05_gems", 64, Set.of(), ""),
+                new CatalogItem("t:block", "t", "T", "Bloc", "06_blocks", 64, Set.of(), ""),
+                new CatalogItem("t:bricks", "t", "T", "Briques", "06_blocks", 64, Set.of(), ""),
+                new CatalogItem("t:chiseled", "t", "T", "Bloc sculpté", "06_blocks", 64, Set.of(), ""),
+                new CatalogItem("t:gadget", "t", "T", "Gadget", "08_components", 64, Set.of(), "")
+        );
+        List<RecipeEntry> recipes = List.of(
+                craft("t:block", 1, "t:crystal", 4),
+                craft("t:crystal_from_block", "t:crystal", 4, "t:block", 1),
+                craft("t:bricks", 1, "t:block", 1),
+                craft("t:chiseled", 1, "t:bricks", 1),
+                craft("t:crystal_from_chiseled", "t:crystal", 4, "t:chiseled", 1),
+                craft("t:gadget", 1, "t:crystal", 2)
+        );
+        RecipeIndex idx = new RecipeIndex(items, recipes);
+        CraftTreeCalculator.CraftPlan plan = CraftTreeCalculator.plan(idx, "t:gadget", 1, java.util.Map.of(), java.util.Map.of());
+        CraftTreeCalculator.CraftNode crystal = plan.root().steps().isEmpty() ? null : plan.root().steps().get(0);
+        check("arbre : cristal tiré seulement de variantes de son bloc traité en matière première",
+                crystal != null && crystal.recipe() == null && plan.missingRaw().getOrDefault("t:crystal", 0) == 2
+                        && !plan.missingRaw().containsKey("t:block"));
+        CraftTreeCalculator.CraftPlan bricks = CraftTreeCalculator.plan(idx, "t:bricks", 1, java.util.Map.of(), java.util.Map.of());
+        check("arbre : les briques gardent leur recette (bloc, puis cristaux récoltés)",
+                bricks.root().recipe() != null && bricks.missingRaw().getOrDefault("t:crystal", 0) == 4);
+    }
+
+    private static RecipeEntry craft(String id, int outCount, String input, int inCount) {
+        return craft(id, id, outCount, input, inCount);
+    }
+
+    private static RecipeEntry craft(String id, String output, int outCount, String input, int inCount) {
+        return new RecipeEntry(id, "minecraft:crafting_shaped", "Fabrication", List.of("minecraft:crafting_table"),
+                List.of(new RecipeEntry.IngredientSlot(List.of(input), inCount)), List.of(),
+                List.of(new RecipeEntry.ItemAmount(output, outCount)), 0, 0, 0);
+    }
+
     /** L'arbre préfère le fer brut au four, écarte minerais en bloc et pépites, et traite la redstone en matière brute. */
     private static void testNaturalRecipeChoice() {
         List<CatalogItem> items = List.of(
@@ -365,6 +406,43 @@ public final class WmiTests {
                 cuPlan.root().recipe() != null && cuPlan.root().recipe().id().equals("minecraft:copper_ingot")
                         && cuPlan.missingRaw().getOrDefault("minecraft:raw_copper", 0) == 3
                         && !cuPlan.missingRaw().containsKey("minecraft:honeycomb"));
+
+        // Teinture et lavage : câble bleu = 8 câbles fluix + teinture ; câble fluix = 4 câbles fins, ou lavage
+        // de 8 câbles teints (n'importe quelle couleur) avec un seau d'eau. Le lavage ne doit pas reprendre le
+        // câble bleu visé (ni son surplus) : l'arbre passe par les câbles fins.
+        List<CatalogItem> cabItems = List.of(
+                new CatalogItem("demo:blue_cable", "demo", "Demo", "Câble bleu", "07_cables", 64, Set.of("demo:colored_cables"), ""),
+                new CatalogItem("demo:red_cable", "demo", "Demo", "Câble rouge", "07_cables", 64, Set.of("demo:colored_cables"), ""),
+                new CatalogItem("demo:fluix_cable", "demo", "Demo", "Câble fluix", "07_cables", 64, Set.of(), ""),
+                new CatalogItem("demo:thin_cable", "demo", "Demo", "Câble fin", "07_cables", 64, Set.of(), ""),
+                new CatalogItem("minecraft:blue_dye", "minecraft", "Minecraft", "Teinture bleue", "02_raw", 64, Set.of(), ""),
+                new CatalogItem("minecraft:water_bucket", "minecraft", "Minecraft", "Seau d'eau", "02_raw", 1, Set.of(), "")
+        );
+        List<String> colored = List.of("demo:blue_cable", "demo:red_cable");
+        List<RecipeEntry> cabRecipes = List.of(
+                new RecipeEntry("demo:blue_cable", "minecraft:crafting_shaped", "Fabrication", List.of("minecraft:crafting_table"),
+                        List.of(new RecipeEntry.IngredientSlot(List.of("demo:fluix_cable"), 8),
+                                new RecipeEntry.IngredientSlot(List.of("minecraft:blue_dye"), 1)), List.of(),
+                        List.of(new RecipeEntry.ItemAmount("demo:blue_cable", 8)), 0, 0, 0),
+                new RecipeEntry("demo:red_cable", "minecraft:crafting_shaped", "Fabrication", List.of("minecraft:crafting_table"),
+                        List.of(new RecipeEntry.IngredientSlot(List.of("demo:fluix_cable"), 8)), List.of(),
+                        List.of(new RecipeEntry.ItemAmount("demo:red_cable", 8)), 0, 0, 0),
+                new RecipeEntry("demo:fluix_cable_wash", "minecraft:crafting_shaped", "Fabrication", List.of("minecraft:crafting_table"),
+                        List.of(new RecipeEntry.IngredientSlot(colored, 8, "demo:colored_cables"),
+                                new RecipeEntry.IngredientSlot(List.of("minecraft:water_bucket"), 1)), List.of(),
+                        List.of(new RecipeEntry.ItemAmount("demo:fluix_cable", 8)), 0, 0, 0),
+                new RecipeEntry("demo:fluix_cable", "minecraft:crafting_shapeless", "Fabrication", List.of("minecraft:crafting_table"),
+                        List.of(new RecipeEntry.IngredientSlot(List.of("demo:thin_cable"), 4)), List.of(),
+                        List.of(new RecipeEntry.ItemAmount("demo:fluix_cable", 1)), 0, 0, 0)
+        );
+        CraftTreeCalculator.CraftPlan cabPlan = CraftTreeCalculator.plan(new RecipeIndex(cabItems, cabRecipes),
+                "demo:blue_cable", 10, java.util.Map.of(), java.util.Map.of());
+        CraftTreeCalculator.CraftNode fluix = cabPlan.root().steps().get(0);
+        check("arbre : le cable fluix n'est pas obtenu en lavant des cables teints (pas de boucle)",
+                fluix.itemId().equals("demo:fluix_cable") && fluix.recipe() != null
+                        && fluix.recipe().id().equals("demo:fluix_cable")
+                        && cabPlan.missingRaw().getOrDefault("demo:thin_cable", 0) == 64
+                        && !cabPlan.missingRaw().containsKey("minecraft:water_bucket"));
     }
 
     private static void testPinnedChecklist(RecipeIndex index) {
@@ -731,6 +809,7 @@ public final class WmiTests {
         testSearchAndFilters(index);
         testCraftTreeAndCycles(index);
         testNaturalRecipeChoice();
+        testRoundTripCrystal();
         testPinnedChecklist(index);
         testCommandPalette(index);
         testInventorySorter();

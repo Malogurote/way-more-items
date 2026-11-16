@@ -425,7 +425,7 @@ final class WmiOverlayInput {
             o.notes.focusNotes();
             return true;
         }
-        if (WmiClient.KEY_PALETTE.matches(event)) {
+        if (WmiClient.KEY_QUICK.matches(event)) {
             o.openModal(screen, WmiRecipeScreen.ViewMode.COMMAND_PALETTE, "");
             return true;
         }

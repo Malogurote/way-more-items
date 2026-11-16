@@ -40,9 +40,16 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         RECIPES,
         USES,
         CRAFT_TREE,
+        /** Fenêtre « Accès rapide » : bloc des Notes (note ou objet) posé juste au-dessus de la palette de commande. */
         COMMAND_PALETTE,
         POST_IT_INPUT
     }
+
+    /** Accès rapide : largeur commune des deux blocs, hauteur de la palette, hauteur maximale du bloc des Notes, écart. */
+    private static final int QUICK_W = 264;
+    private static final int QUICK_H = 176;
+    private static final int QUICK_NOTES_MAX_H = 70;
+    private static final int QUICK_GAP = 4;
 
     private record HistoryState(ViewMode mode, String targetItemId, int tabIndex, int pageIndex, int treeMultiplier) {
     }
@@ -62,6 +69,13 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
     private static final int RECIPES_PER_PAGE = 2;
 
     private int treeMultiplier = 1;
+    /** Quantité à fabriquer : bornes du compteur, saisie en cours (champ actif) et position du champ au dernier dessin. */
+    private static final int AMOUNT_MAX = 9999;
+    private boolean amountFocused;
+    private String amountDraft = "";
+    private int amountX = -1;
+    private int amountY;
+    private int amountW;
     private CraftTreeCalculator.CraftPlan currentPlan;
     private int treeScrollOffset;
 
@@ -72,6 +86,9 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
 
     private String paletteInput = "";
     private CommandPalette.PaletteResult paletteResult;
+    /** Accès rapide : saisie du bloc des Notes, distincte de celle de la palette, et champ qui reçoit la frappe. */
+    private String quickNoteInput = "";
+    private boolean quickNoteFocused = false;
 
     private String hoveredItemId;
     private final List<ClickableZone> clickZones = new ArrayList<>();
@@ -184,7 +201,10 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         // Saisie de texte du système (SDL3) : sans startTextInput, aucun caractère n'arrive à charTyped.
         // La palette et l'éditeur de Notes sont des champs dessinés à la main ; Gui.setScreen coupe la saisie
         // à la fermeture de l'écran.
-        if (mode == ViewMode.COMMAND_PALETTE || mode == ViewMode.POST_IT_INPUT) {
+        if (mode != ViewMode.CRAFT_TREE) {
+            amountFocused = false;
+        }
+        if (mode == ViewMode.COMMAND_PALETTE || mode == ViewMode.POST_IT_INPUT || amountFocused) {
             Minecraft.getInstance().textInputManager().startTextInput(this);
         } else {
             Minecraft.getInstance().textInputManager().stopTextInput(this);
@@ -198,17 +218,24 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         int boxW;
         int boxH;
         if (mode == ViewMode.COMMAND_PALETTE) {
-            boxW = 264;
-            boxH = 192;
+            boxW = QUICK_W;
+            boxH = QUICK_H;
         } else if (mode == ViewMode.CRAFT_TREE) {
             boxW = Math.min(width - 70, 340);
-            boxH = Math.min(height - 24, craftTreeHeight(boxW));
+            boxH = Math.min(height - 36, craftTreeHeight(boxW)); // place du titre au-dessus
         } else {
             boxW = 252;
             boxH = recipesViewHeight();
         }
         int x0 = (width - boxW) / 2;
         int y0 = (height - boxH) / 2;
+        if (mode == ViewMode.RECIPES || mode == ViewMode.USES || mode == ViewMode.CRAFT_TREE) {
+            y0 = Math.max(y0, Math.min(18, height - boxH)); // place du titre au-dessus de la fenêtre
+        } else if (mode == ViewMode.COMMAND_PALETTE) {
+            // Pile centrée à la hauteur maximale du bloc des Notes : la palette ne bouge pas quand ce bloc grandit
+            int stackTop = Math.max(4, (height - (QUICK_NOTES_MAX_H + QUICK_GAP + QUICK_H)) / 2);
+            y0 = stackTop + QUICK_NOTES_MAX_H + QUICK_GAP;
+        }
 
         WmiDraw.drawFrostedPanel(graphics, x0, y0, boxW, boxH);
 
@@ -246,15 +273,20 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         if (!targetStack.isEmpty()) {
             g.fakeItem(targetStack, x0 + 6, y0 + 5);
         }
-        String modeLabel = mode == ViewMode.RECIPES
-                ? Component.translatable("gui.wmi.mode.recipes").getString()
-                : Component.translatable("gui.wmi.mode.uses").getString();
+        // Titre « Recettes » ou « Usages » en grand, texte simple au-dessus du coin gauche de la fenêtre
+        // (fond toujours assombri derrière l'écran : texte clair quel que soit le thème)
+        String modeLabel = WmiText.s(mode == ViewMode.RECIPES ? "gui.wmi.mode.recipes" : "gui.wmi.mode.uses");
+        WmiDraw.drawBigText(g, font, modeLabel, x0 + 2, y0 - 16, 0xFFF1F5F9);
         String itemName = !targetStack.isEmpty() ? WmiNames.of(targetStack) : targetItemId;
-        WmiDraw.drawText(g, font, trimToWidth(modeLabel + " : " + itemName, boxW - 122), x0 + 25, y0 + 9, th.textMain);
+        WmiDraw.drawText(g, font, trimToWidth(itemName, boxW - 122), x0 + 25, y0 + 9, th.textMain);
 
         int btnRight = x0 + boxW - 6;
         // Bouton Fermer
-        drawSmallButton(g, btnRight - 14, y0 + 6, 14, 14, "x", mouseX, mouseY, this::onClose);
+        int closeX = btnRight - 14;
+        int closeY = y0 + 6;
+        WmiDraw.drawCloseButton(g, closeX, closeY, 14, 14,
+                mouseX >= closeX && mouseX < closeX + 14 && mouseY >= closeY && mouseY < closeY + 14);
+        clickZones.add(new ClickableZone(closeX, closeY, 14, 14, this::onClose));
         btnRight -= 16;
 
         // Bascule Recettes <-> Usages
@@ -265,7 +297,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         btnRight -= 46;
 
         // Onglets latéraux « Arbre » et « Donner », collés au bord extérieur droit de la fenêtre
-        drawSideTabs(g, x0, y0, boxW, mouseX, mouseY);
+        drawSideTabs(g, x0, y0, boxW, boxH, mouseX, mouseY);
 
         if (availableTypes.isEmpty()) {
             String none = Component.translatable("gui.wmi.no_recipes").getString();
@@ -406,15 +438,17 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             WmiDraw.drawText(g, font, rec.totalEnergy() + " EU", metaX, metaY, th.textMuted);
         }
 
-        // Bouton « + » : ingrédients de la recette ajoutés aux Notes (vert si tout est déjà en inventaire)
+        // Bouton « + » : arbre de fabrication de la recette ajouté aux Notes (vert si tout est déjà en inventaire)
         boolean canExec = WmiClientIndex.get().canExecuteSingleRecipe(rec, playerInventory);
-        int btnX = cx + cw - 20;
-        int btnY = cy + ch - 16;
-        boolean hover = mouseX >= btnX && mouseX < btnX + 16 && mouseY >= btnY && mouseY < btnY + 13;
+        // Carré de 14 et croix dessinée en aplats (traits de 2, symétriques au centre), à la manière des boutons
+        // à pictogramme du vanilla : plus de « + » de police, décalé d'un demi-pixel selon l'échelle
+        int btnX = cx + cw - 18;
+        int btnY = cy + ch - 17;
+        boolean hover = mouseX >= btnX && mouseX < btnX + 14 && mouseY >= btnY && mouseY < btnY + 14;
         int btnCol = hover ? th.accent : (canExec ? th.green : th.textMuted);
-        WmiDraw.drawBox(g, btnX, btnY, 16, 13, hover ? th.slotHover : th.slotBg, btnCol);
-        WmiDraw.drawText(g, font, "+", btnX + 5, btnY + 3, btnCol);
-        clickZones.add(new ClickableZone(btnX, btnY, 16, 13, () -> pinIngredientsToNotes(rec)));
+        WmiDraw.drawBox(g, btnX, btnY, 14, 14, hover ? th.slotHover : th.slotBg, btnCol);
+        WmiDraw.drawPlusGlyph(g, btnX, btnY, 14, 14, btnCol);
+        clickZones.add(new ClickableZone(btnX, btnY, 14, 14, () -> pinTreeToNotes(rec)));
         if (hover) {
             g.setTooltipForNextFrame(WmiText.c("wmi.recipe.add_to_notes_tip"), WmiUiScale.real(mouseX), WmiUiScale.real(mouseY));
         }
@@ -424,10 +458,10 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             String label = WmiText.s("wmi.recipe.place_in_grid");
             int pw = WmiVector.width(font, label) + 10;
             int px = leftOfPlus - pw;
-            boolean phover = mouseX >= px && mouseX < px + pw && mouseY >= btnY && mouseY < btnY + 13;
-            WmiDraw.drawBox(g, px, btnY, pw, 13, phover ? th.slotHover : th.slotBg, phover ? th.accent : th.innerBorder);
+            boolean phover = mouseX >= px && mouseX < px + pw && mouseY >= btnY && mouseY < btnY + 14;
+            WmiDraw.drawBox(g, px, btnY, pw, 14, phover ? th.slotHover : th.slotBg, phover ? th.accent : th.innerBorder);
             WmiDraw.drawText(g, font, label, px + 5, btnY + 3, phover ? th.accent : th.textMain);
-            clickZones.add(new ClickableZone(px, btnY, pw, 13, () -> placeInOpenGrid(rec)));
+            clickZones.add(new ClickableZone(px, btnY, pw, 14, () -> placeInOpenGrid(rec)));
             if (phover) {
                 g.setTooltipForNextFrame(WmiText.c("wmi.recipe.place_in_grid_tip"), WmiUiScale.real(mouseX), WmiUiScale.real(mouseY));
             }
@@ -461,12 +495,23 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         onClose();
     }
 
-    /** Ajoute les ingrédients de {@code rec} aux Notes (suivi de quantités) ; la fenêtre reste ouverte. */
-    private void pinIngredientsToNotes(RecipeEntry rec) {
-        int added = checklist.pinRecipeInputs(rec, 1);
+    /**
+     * Ajoute aux Notes l'arbre de fabrication complet du produit de {@code rec} (cette recette imposée au sommet,
+     * meilleures recettes en dessous, comme l'écran « Arbre ») ; la fenêtre reste ouverte.
+     */
+    private void pinTreeToNotes(RecipeEntry rec) {
         pinnedFeedbackRecipe = rec;
-        pinnedFeedbackText = added == 0 ? WmiText.s("wmi.recipe.added_none") : WmiText.n("wmi.recipe.added", added);
         pinnedFeedbackUntil = System.currentTimeMillis() + 2000L;
+        if (rec.outputs().isEmpty()) {
+            pinnedFeedbackText = WmiText.s("wmi.recipe.added_none");
+            return;
+        }
+        String out = rec.outputs().get(0).itemId();
+        int count = Math.max(1, rec.outputCount(out));
+        CraftTreeCalculator.CraftPlan plan = CraftTreeCalculator.plan(
+                WmiClientIndex.get(), out, count, playerInventory, Map.of(out, rec.id()));
+        checklist.pinPlan(out, count, plan);
+        pinnedFeedbackText = WmiText.s("wmi.recipe.tree_added");
     }
 
     private void drawAnimatedArrow(GuiGraphicsExtractor g, int x, int y, int w) {
@@ -553,27 +598,18 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         if (!targetStack.isEmpty()) {
             g.fakeItem(targetStack, x0 + 7, y0 + 6);
         }
-        drawSideTabs(g, x0, y0, boxW, mouseX, mouseY);
+        drawSideTabs(g, x0, y0, boxW, boxH, mouseX, mouseY);
         String targetName = !targetStack.isEmpty() ? WmiNames.of(targetStack) : targetItemId;
-        int[] mults = {1, 4, 16, 64};
-        int multW = 24;
-        int mx = x0 + boxW - 7 - mults.length * (multW + 1);
-        WmiDraw.drawText(g, font, trimToWidth(WmiText.s("wmi.tree.craft_title", targetName), mx - x0 - 32), x0 + 27, y0 + 10, th.textMain);
-        for (int m : mults) {
-            final int mul = m;
-            boolean active = treeMultiplier == m;
-            boolean hover = mouseX >= mx && mouseX < mx + multW && mouseY >= y0 + 7 && mouseY < y0 + 21;
-            WmiDraw.drawBox(g, mx, y0 + 7, multW, 14, active ? th.accentSoft : (hover ? th.slotHover : th.slotBg),
-                    (active || hover) ? th.accent : th.innerBorder);
-            String lbl = "×" + m;
-            WmiDraw.drawText(g, font, lbl, mx + (multW - WmiVector.width(font, lbl)) / 2, y0 + 10, active ? th.accent : th.textMain);
-            clickZones.add(new ClickableZone(mx, y0 + 7, multW, 14, () -> {
-                treeMultiplier = mul;
-                treeScrollOffset = 0;
-                refreshData();
-            }));
-            mx += multW + 1;
-        }
+        // Bouton Fermer à droite de l'en-tête, comme dans la fenêtre des recettes ; compteur de quantité à sa gauche
+        int closeX = x0 + boxW - 6 - 14;
+        int closeY = y0 + 7;
+        WmiDraw.drawCloseButton(g, closeX, closeY, 14, 14,
+                mouseX >= closeX && mouseX < closeX + 14 && mouseY >= closeY && mouseY < closeY + 14);
+        clickZones.add(new ClickableZone(closeX, closeY, 14, 14, this::onClose));
+        int counterX = drawAmountCounter(g, closeX - 6, y0 + 7, mouseX, mouseY);
+        // Titre en grand au-dessus de la fenêtre, comme « Recettes » et « Usages » ; l'en-tête ne garde que le nom
+        WmiDraw.drawBigText(g, font, WmiText.s("gui.wmi.mode.tree"), x0 + 2, y0 - 16, 0xFFF1F5F9);
+        WmiDraw.drawText(g, font, trimToWidth(targetName, counterX - x0 - 32), x0 + 27, y0 + 10, th.textMain);
 
         if (currentPlan == null) {
             return;
@@ -617,17 +653,28 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         // 3. Bilan et actions
         int footY = y0 + boxH - 36;
         WmiDraw.bar(g, x0 + 8, footY - 2, x0 + boxW - 8, footY - 1, th.innerBorder);
-        StringBuilder sum = new StringBuilder();
-        sum.append(WmiText.n("wmi.tree.step_count", steps.size()));
+        // Bilan : éléments séparés par un liseré vertical discret
+        List<String> sum = new ArrayList<>();
+        sum.add(WmiText.n("wmi.tree.step_count", steps.size()));
         if (currentPlan.totalEnergyEu() > 0) {
-            sum.append(" • ").append(currentPlan.totalEnergyEu()).append(" EU");
+            sum.add(currentPlan.totalEnergyEu() + " EU");
         }
         if (currentPlan.totalTicks() > 0) {
-            sum.append(" • ").append(WmiText.s("wmi.tree.machine_seconds", String.format(Locale.ROOT, "%.0f", currentPlan.totalTicks() / 20.0)));
+            sum.add(WmiText.s("wmi.tree.machine_seconds", String.format(Locale.ROOT, "%.0f", currentPlan.totalTicks() / 20.0)));
         }
-        WmiDraw.drawText(g, font, sum.toString(), x0 + 9, footY + 3, th.textMain);
+        int sx = x0 + 9;
+        for (int k = 0; k < sum.size(); k++) {
+            if (k > 0) {
+                WmiDraw.bar(g, sx + 5, footY + 2, sx + 6, footY + 11, th.innerBorder);
+                sx += 11;
+            }
+            WmiDraw.drawText(g, font, sum.get(k), sx, footY + 3, th.textMain);
+            sx += WmiVector.width(font, sum.get(k));
+        }
         drawSmallButton(g, x0 + 8, footY + 16, 64, 15, Component.translatable("gui.wmi.btn.back").getString(), mouseX, mouseY, this::goBack);
-        drawSmallButton(g, x0 + boxW - 128, footY + 16, 120, 15, Component.translatable("gui.wmi.btn.pin_hud").getString(), mouseX, mouseY, () -> {
+        String toNotes = WmiText.s("wmi.tree.show_in_notes");
+        int toNotesW = Math.min(boxW - 88, WmiVector.width(font, toNotes) + 16);
+        drawSmallButton(g, x0 + boxW - 8 - toNotesW, footY + 16, toNotesW, 15, toNotes, mouseX, mouseY, () -> {
             checklist.pinPlan(targetItemId, treeMultiplier, currentPlan);
             onClose();
         });
@@ -702,25 +749,63 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         }
     }
 
+    /** Fin de la saisie qui tient dans {@code maxW} : en tapant, on voit toujours les derniers caractères. */
+    private String tailToWidth(String s, int maxW) {
+        String out = s;
+        while (!out.isEmpty() && WmiVector.width(font, out) > maxW) {
+            out = out.substring(out.offsetByCodePoints(0, 1));
+        }
+        return out;
+    }
+
+    /**
+     * Fenêtre « Accès rapide » (touche ² par défaut) : palette de commande (en-tête et bouton de fermeture, champ,
+     * actions, don et objets trouvés) et, juste au-dessus, bloc indépendant des Notes (note ou objet). Un clic sur un
+     * champ ou Tab choisit celui qui reçoit la frappe ; Entrée valide le champ actif, Échap ferme.
+     */
     private void renderCommandPalette(GuiGraphicsExtractor g, int x0, int y0, int boxW, int boxH, int mouseX, int mouseY) {
         WmiTheme th = theme();
         WmiDraw.bar(g, x0 + 3, y0 + 3, x0 + boxW - 3, y0 + 23, th.cardBg);
-        WmiDraw.drawText(g, font, Component.translatable("gui.wmi.palette.title").getString(), x0 + 8, y0 + 8, th.accent);
+        WmiDraw.drawText(g, font, WmiText.s("wmi.quick.commands"), x0 + 8, y0 + 8, th.accent);
+
+        // Bouton Fermer, comme celui de la fenêtre des recettes
+        int closeX = x0 + boxW - 6 - 14;
+        int closeY = y0 + 6;
+        WmiDraw.drawCloseButton(g, closeX, closeY, 14, 14,
+                mouseX >= closeX && mouseX < closeX + 14 && mouseY >= closeY && mouseY < closeY + 14);
+        clickZones.add(new ClickableZone(closeX, closeY, 14, 14, this::onClose));
 
         int barX = x0 + 8;
         int barY = y0 + 28;
         int barW = boxW - 16;
-        WmiDraw.drawBox(g, barX, barY, barW, 18, th.slotBg, th.accent);
-        String prompt = "> " + paletteInput + "_";
+        boolean focused = !quickNoteFocused;
+        WmiDraw.drawBox(g, barX, barY, barW, 18, th.slotBg, focused ? th.accent : th.innerBorder);
+        clickZones.add(new ClickableZone(barX, barY, barW, 18, () -> quickNoteFocused = false));
+        int textW = barW - 10;
+        if (paletteInput.isEmpty()) {
+            WmiDraw.drawText(g, font, trimToWidth(WmiText.s("wmi.quick.placeholder.commands"), textW - 12), barX + 17, barY + 5, th.textMuted);
+        }
+        String caret = focused && (System.currentTimeMillis() / 500L) % 2 == 0 ? "_" : "";
+        String prompt = "> " + tailToWidth(paletteInput + caret, textW - WmiVector.width(font, "> "));
         WmiDraw.drawText(g, font, prompt, barX + 5, barY + 5, th.textMain);
 
+        renderPaletteResults(g, barX, barY, barW, mouseX, mouseY);
+
+        // Bloc des Notes, dessiné après la palette pour que l'infobulle de ses objets passe au-dessus d'elle
+        int notesH = notesBlockHeight();
+        renderNotesBlock(g, x0, y0 - QUICK_GAP - notesH, boxW, quickNoteFocused, mouseX, mouseY);
+    }
+
+    /** Actions suggérées, don ou action reconnue, puis objets trouvés, sous le champ de la palette. */
+    private void renderPaletteResults(GuiGraphicsExtractor g, int barX, int barY, int barW, int mouseX, int mouseY) {
         if (paletteResult == null) {
             return;
         }
 
         int listY = barY + 24;
         if (paletteResult.kind() == CommandPalette.IntentKind.EXECUTE_ACTION && paletteResult.action() != null) {
-            String actDesc = Component.translatable("gui.wmi.palette.run_action", paletteResult.action().id()).getString();
+            String actName = Component.translatable("gui.wmi.action." + paletteResult.action().id()).getString();
+            String actDesc = Component.translatable("gui.wmi.palette.run_action", actName).getString();
             drawSmallButton(g, barX, listY, barW, 18, actDesc, mouseX, mouseY, () -> {
                 WmiNetwork.send(new WmiPayloads.ActionPayload(paletteResult.action().id()));
                 onClose();
@@ -766,40 +851,121 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
     }
 
     /**
-     * Onglets marque-pages collés au bord extérieur de la fenêtre, à la manière des onglets des conteneurs :
-     * arbre de fabrication et, en mode Admin, don d'une pile (un seul exemplaire pour un objet non empilable).
+     * Compteur de quantité à fabriquer, aligné à droite sur {@code right} : « − », champ saisissable (clic, chiffres,
+     * Entrée ; molette au survol), « + ». Renvoie l'abscisse de son bord gauche.
      */
-    private void drawSideTabs(GuiGraphicsExtractor g, int x0, int y0, int boxW, int mouseX, int mouseY) {
+    private int drawAmountCounter(GuiGraphicsExtractor g, int right, int y, int mouseX, int mouseY) {
+        WmiTheme th = theme();
+        int btn = 14;
+        int fieldW = Math.max(30, WmiVector.width(font, "9999") + 10);
+        int plusX = right - btn;
+        int fieldX = plusX - 2 - fieldW;
+        int minusX = fieldX - 2 - btn;
+
+        boolean minusHover = mouseX >= minusX && mouseX < minusX + btn && mouseY >= y && mouseY < y + btn;
+        int minusCol = minusHover ? th.accent : th.textMain;
+        WmiDraw.drawBox(g, minusX, y, btn, btn, minusHover ? th.accentSoft : th.slotBg, minusHover ? th.accent : th.innerBorder);
+        g.fill(minusX + 3, y + 6, minusX + btn - 3, y + 8, minusCol);
+        clickZones.add(new ClickableZone(minusX, y, btn, btn, () -> setAmount(treeMultiplier - 1)));
+
+        boolean fieldHover = mouseX >= fieldX && mouseX < fieldX + fieldW && mouseY >= y && mouseY < y + btn;
+        WmiDraw.drawBox(g, fieldX, y, fieldW, btn, amountFocused ? th.cardBg : (fieldHover ? th.slotHover : th.slotBg),
+                amountFocused || fieldHover ? th.accent : th.innerBorder);
+        String shown = amountFocused ? amountDraft : String.valueOf(treeMultiplier);
+        int tw = WmiVector.width(font, shown);
+        int tx = fieldX + (fieldW - tw) / 2;
+        WmiDraw.drawText(g, font, shown, tx, y + 3, amountFocused ? th.accent : th.textMain);
+        if (amountFocused && (System.currentTimeMillis() / 500L) % 2 == 0) {
+            g.fill(tx + tw + 1, y + 3, tx + tw + 2, y + 11, th.accent);
+        }
+        clickZones.add(new ClickableZone(fieldX, y, fieldW, btn, () -> {
+            amountFocused = true;
+            amountDraft = "";
+        }));
+        if (fieldHover && !amountFocused) {
+            g.setTooltipForNextFrame(WmiText.c("wmi.tree.amount_tip"), WmiUiScale.real(mouseX), WmiUiScale.real(mouseY));
+        }
+        amountX = fieldX;
+        amountY = y;
+        amountW = fieldW;
+
+        boolean plusHover = mouseX >= plusX && mouseX < plusX + btn && mouseY >= y && mouseY < y + btn;
+        WmiDraw.drawBox(g, plusX, y, btn, btn, plusHover ? th.accentSoft : th.slotBg, plusHover ? th.accent : th.innerBorder);
+        WmiDraw.drawPlusGlyph(g, plusX, y, btn, btn, plusHover ? th.accent : th.textMain);
+        clickZones.add(new ClickableZone(plusX, y, btn, btn, () -> setAmount(treeMultiplier + 1)));
+        return minusX;
+    }
+
+    /** Fixe la quantité à fabriquer (bornée de 1 à {@link #AMOUNT_MAX}) et recalcule l'arbre si elle change. */
+    private void setAmount(int amount) {
+        int clamped = Math.max(1, Math.min(AMOUNT_MAX, amount));
+        if (clamped != treeMultiplier) {
+            treeMultiplier = clamped;
+            treeScrollOffset = 0;
+            refreshData();
+        }
+    }
+
+    /** Valide la saisie du champ de quantité ; une saisie vide garde la valeur précédente. */
+    private void commitAmount() {
+        if (!amountFocused) {
+            return;
+        }
+        amountFocused = false;
+        if (!amountDraft.isEmpty()) {
+            setAmount(Integer.parseInt(amountDraft));
+        }
+        amountDraft = "";
+    }
+
+    /**
+     * Boutons carrés posés contre le bas du bord extérieur droit de la fenêtre, sans la chevaucher (même écart de 4 que
+     * le bouton « Paramètres » contre le catalogue) : arbre de fabrication et, en mode Admin, don d'une pile
+     * (un seul exemplaire pour un objet non empilable), signalé par une pastille « + » verte.
+     */
+    private void drawSideTabs(GuiGraphicsExtractor g, int x0, int y0, int boxW, int boxH, int mouseX, int mouseY) {
         if (targetItemId == null || targetItemId.isEmpty()) {
             return;
         }
         WmiTheme th = theme();
-        int tx = x0 + boxW - 2;
-        int tw = 24;
-        int th1 = 22;
-        int ty = y0 + 26;
+        int tx = x0 + boxW + 4;
+        int size = 22;
+        // Alignés sur le bas de la fenêtre : « Donner » au ras du bas, « Arbre » au-dessus (ou au ras du bas seul)
+        boolean canGive = WmiClient.overlay().canGiveItems(Minecraft.getInstance());
+        int bottomY = y0 + boxH - size;
+        int treeY = canGive ? bottomY - size - 3 : bottomY;
         boolean treeActive = mode == ViewMode.CRAFT_TREE;
-        sideTab(g, th, tx, ty, tw, th1, new ItemStack(net.minecraft.world.item.Items.CRAFTING_TABLE), treeActive,
-                Component.translatable("gui.wmi.btn.tree").getString(), mouseX, mouseY,
+        sideTab(g, th, tx, treeY, size, size, new ItemStack(net.minecraft.world.item.Items.CRAFTING_TABLE), treeActive, false,
+                List.of(WmiText.c("gui.wmi.btn.tree")), mouseX, mouseY,
                 () -> navigateTo(treeActive ? ViewMode.RECIPES : ViewMode.CRAFT_TREE, targetItemId));
-        if (WmiClient.overlay().canGiveItems(Minecraft.getInstance())) {
+        if (canGive) {
             ItemStack st = WmiClientIndex.stackFor(targetItemId);
             int count = st.isEmpty() ? 64 : Math.max(1, Math.min(64, st.getMaxStackSize()));
-            sideTab(g, th, tx, ty + th1 + 3, tw, th1, st, false, WmiText.s("wmi.recipe.give_count", count), mouseX, mouseY,
+            List<Component> tip = List.of(WmiText.c("wmi.recipe.give_count", count),
+                    WmiText.c("wmi.recipe.give_tip").withStyle(net.minecraft.ChatFormatting.GRAY));
+            sideTab(g, th, tx, bottomY, size, size, st, false, true, tip, mouseX, mouseY,
                     () -> WmiClient.overlay().giveItemToPlayer(targetItemId, count));
         }
     }
 
     private void sideTab(GuiGraphicsExtractor g, WmiTheme th, int x, int y, int w, int h, ItemStack icon, boolean active,
-                         String tooltip, int mouseX, int mouseY, Runnable onClick) {
+                         boolean plusBadge, List<Component> tooltip, int mouseX, int mouseY, Runnable onClick) {
         boolean hover = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
         WmiDraw.drawBox(g, x, y, w, h, active ? th.accentSoft : (hover ? th.slotHover : th.panelBg),
                 (active || hover) ? th.accent : th.border);
         if (!icon.isEmpty()) {
-            g.fakeItem(icon, x + (w - 16) / 2 + 1, y + (h - 16) / 2);
+            g.fakeItem(icon, x + (w - 16) / 2, y + (h - 16) / 2);
+        }
+        if (plusBadge) {
+            // Pastille « + » dans le coin bas droit, au-dessus de l'objet : « ajouter à l'inventaire »
+            int bx = x + w - 9;
+            int by = y + h - 9;
+            WmiDraw.drawBox(g, bx, by, 8, 8, hover ? th.accent : th.green, 0xFF0F172A);
+            g.fill(bx + 2, by + 3, bx + 6, by + 5, 0xFFFFFFFF);
+            g.fill(bx + 3, by + 2, bx + 5, by + 6, 0xFFFFFFFF);
         }
         if (hover) {
-            g.setTooltipForNextFrame(Component.literal(tooltip), WmiUiScale.real(mouseX), WmiUiScale.real(mouseY));
+            g.setTooltipForNextFrame(font, tooltip, java.util.Optional.empty(), WmiUiScale.real(mouseX), WmiUiScale.real(mouseY));
         }
         clickZones.add(new ClickableZone(x, y, w, h, onClick));
     }
@@ -837,6 +1003,8 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         double my = event.y();
         int btn = event.button();
 
+        // Un clic ailleurs valide la quantité saisie (un clic sur le champ le rouvre aussitôt, vide)
+        commitAmount();
         if (WmiOverlayInput.isLeftClick(btn)) {
             for (ClickableZone z : clickZones) {
                 if (z.contains(mx, my)) {
@@ -860,6 +1028,13 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (mode == ViewMode.CRAFT_TREE) {
+            double ux = mouseX / uiFactor();
+            double uy = mouseY / uiFactor();
+            if (amountX >= 0 && ux >= amountX && ux < amountX + amountW && uy >= amountY && uy < amountY + 14) {
+                commitAmount();
+                setAmount(treeMultiplier + (scrollY > 0 ? 1 : -1)); // molette sur le champ : quantité ±1
+                return true;
+            }
             treeScrollOffset = Math.max(0, treeScrollOffset + (scrollY < 0 ? 1 : -1));
             return true;
         }
@@ -890,12 +1065,28 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
      * (boutons ou nombre en tête de la recherche, « 16 torche ») et ajout seul ou avec l'arbre. Entrée valide, Échap ferme.
      */
     private void renderPostItEditor(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        renderNotesBlock(g, 8, 8, 200, true, mouseX, mouseY);
+    }
+
+    private int notesBlockHeight() {
+        return 22 + 15 + (editorItemMode ? 30 : 0) + 3;
+    }
+
+    /** Saisie du bloc des Notes : celle de l'accès rapide, ou celle de la fenêtre de la touche N. */
+    private String editorText() {
+        return mode == ViewMode.COMMAND_PALETTE ? quickNoteInput : paletteInput;
+    }
+
+    /**
+     * Bloc des Notes (fenêtre de la touche N, ou bloc du haut de l'accès rapide) à {@code (x, y)}, large de {@code boxW}.
+     * Dans l'accès rapide, {@code focused} indique si son champ reçoit la frappe ; un clic sur le bloc le lui donne.
+     */
+    private void renderNotesBlock(GuiGraphicsExtractor g, int x, int y, int boxW, boolean focused, int mouseX, int mouseY) {
         WmiOverlay o = WmiClient.overlay();
         WmiTheme th = theme();
-        int x = 8;
-        int y = 8;
-        int boxW = 200;
-        int boxH = 22 + 15 + (editorItemMode ? 30 : 0) + 3;
+        int boxH = notesBlockHeight();
+        boolean quick = mode == ViewMode.COMMAND_PALETTE;
+        String text = editorText();
         WmiDraw.drawFrostedPanel(g, x, y, boxW, boxH);
 
         // En-tête identique aux Notes de l'inventaire
@@ -907,22 +1098,33 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         int noteW = WmiVector.width(font, noteLabel) + 8;
         int itemX = x + boxW - 5 - itemW;
         int noteX = itemX - 2 - noteW;
-        modeButton(g, noteX, y + 5, noteW, noteLabel, !editorItemMode, mouseX, mouseY, () -> setEditorItemMode(false));
-        modeButton(g, itemX, y + 5, itemW, itemLabel, editorItemMode, mouseX, mouseY, () -> setEditorItemMode(true));
+        modeButton(g, noteX, y + 5, noteW, noteLabel, !editorItemMode, mouseX, mouseY, () -> {
+            setEditorItemMode(false);
+            quickNoteFocused = quick;
+        });
+        modeButton(g, itemX, y + 5, itemW, itemLabel, editorItemMode, mouseX, mouseY, () -> {
+            setEditorItemMode(true);
+            quickNoteFocused = quick;
+        });
 
         // Champ de saisie
         int fieldY = y + 22;
         int fieldW = boxW - 28;
-        WmiDraw.drawBox(g, x + 4, fieldY, fieldW, 13, th.slotBg, th.accent);
-        if (paletteInput.isEmpty() && editorItemMode) {
-            WmiDraw.drawText(g, font, trimToWidth(WmiText.s("wmi.notes.search_placeholder"), fieldW - 6), x + 7, fieldY + 3, th.textMuted);
+        WmiDraw.drawBox(g, x + 4, fieldY, fieldW, 13, th.slotBg, focused ? th.accent : th.innerBorder);
+        if (text.isEmpty() && (editorItemMode || quick)) {
+            String hint = WmiText.s(editorItemMode ? "wmi.notes.search_placeholder" : "wmi.quick.placeholder.note");
+            WmiDraw.drawText(g, font, trimToWidth(hint, fieldW - 6), x + 7, fieldY + 3, th.textMuted);
         }
-        String shown = paletteInput + ((System.currentTimeMillis() / 500L) % 2 == 0 ? "_" : "");
-        WmiDraw.drawText(g, font, trimToWidth(shown, fieldW - 6), x + 7, fieldY + 3, th.textMain);
+        String shown = text + (focused && (System.currentTimeMillis() / 500L) % 2 == 0 ? "_" : "");
+        WmiDraw.drawText(g, font, quick ? tailToWidth(shown, fieldW - 6) : trimToWidth(shown, fieldW - 6), x + 7, fieldY + 3, th.textMain);
         drawSmallButton(g, x + 6 + fieldW, fieldY, 18, 13, WmiText.s("wmi.common.ok"), mouseX, mouseY, () -> commitEditor(false));
 
         if (editorItemMode) {
             renderEditorPicker(g, o, th, x, fieldY + 15, boxW, mouseX, mouseY);
+        }
+        if (quick) {
+            // En dernier : un clic ailleurs dans le bloc (hors boutons et objets, testés avant) lui donne la frappe
+            clickZones.add(new ClickableZone(x, y, boxW, boxH, () -> quickNoteFocused = true));
         }
     }
 
@@ -942,13 +1144,13 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
 
     /** Recherche de l'objet, sans le nombre éventuel en tête (« 16 torche » : 16 torches). */
     private String editorQuery() {
-        String q = paletteInput.trim();
+        String q = editorText().trim();
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(\\d{1,4})\\s+(.*)$").matcher(q);
         return m.matches() ? m.group(2) : q;
     }
 
     private int editorCount() {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(\\d{1,4})\\s+.*$").matcher(paletteInput.trim());
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(\\d{1,4})\\s+.*$").matcher(editorText().trim());
         return m.matches() ? Math.max(1, Integer.parseInt(m.group(1))) : editorQty;
     }
 
@@ -979,9 +1181,6 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         }
         int slots = Math.max(1, (boxW - 8) / 13);
         String hovered = null;
-        if (shown.isEmpty()) {
-            WmiDraw.drawText(g, font, trimToWidth(WmiText.s("wmi.notes.search_hint"), boxW - 10), x + 5, ry + 3, th.textMuted);
-        }
         for (int i = 0; i < shown.size() && i < slots; i++) {
             String id = shown.get(i);
             int sx = x + 4 + i * 13;
@@ -996,7 +1195,10 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             if (hover) {
                 hovered = id;
             }
-            clickZones.add(new ClickableZone(sx, ry, 12, 12, () -> editorPicked = id));
+            clickZones.add(new ClickableZone(sx, ry, 12, 12, () -> {
+                editorPicked = id;
+                quickNoteFocused = mode == ViewMode.COMMAND_PALETTE;
+            }));
         }
 
         int ay = ry + 15;
@@ -1044,16 +1246,30 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             } else {
                 checklist.pinOrIncrementItem(id, count);
             }
-        } else if (!paletteInput.isBlank()) {
-            checklist.addNote(paletteInput);
+        } else if (!editorText().isBlank()) {
+            checklist.addNote(editorText());
         }
         paletteInput = "";
+        quickNoteInput = "";
         onClose();
     }
 
     @Override
     public boolean charTyped(CharacterEvent event) {
+        if (amountFocused) {
+            // Champ de quantité : chiffres seulement, quatre au plus (sans zéro de tête)
+            String ch = event.codepointAsString();
+            if (ch.length() == 1 && Character.isDigit(ch.charAt(0)) && amountDraft.length() < 4
+                    && !(amountDraft.isEmpty() && ch.equals("0"))) {
+                amountDraft += ch;
+            }
+            return true;
+        }
         if ((mode == ViewMode.COMMAND_PALETTE || mode == ViewMode.POST_IT_INPUT) && event.isAllowedChatCharacter()) {
+            if (mode == ViewMode.COMMAND_PALETTE && quickNoteFocused) {
+                quickNoteInput += event.codepointAsString();
+                return true;
+            }
             paletteInput += event.codepointAsString();
             if (mode == ViewMode.COMMAND_PALETTE) {
                 refreshData();
@@ -1069,6 +1285,19 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         boolean isBackspace = (key == InputConstants.KEY_BACKSPACE || key == 259);
         boolean isEnter = (event.isConfirmation() || key == InputConstants.KEY_RETURN || key == 257 || key == 335);
 
+        if (amountFocused) {
+            if (isBackspace) {
+                if (!amountDraft.isEmpty()) {
+                    amountDraft = amountDraft.substring(0, amountDraft.length() - 1);
+                }
+            } else if (isEnter) {
+                commitAmount();
+            } else if (event.isEscape() || key == InputConstants.KEY_ESCAPE) {
+                amountFocused = false; // Échap abandonne la saisie sans fermer la fenêtre
+                amountDraft = "";
+            }
+            return true; // aucune autre touche (inventaire, raccourcis) pendant la saisie
+        }
         if (mode == ViewMode.POST_IT_INPUT) {
             if (isBackspace) {
                 if (!paletteInput.isEmpty()) {
@@ -1088,10 +1317,22 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
         }
         if (mode == ViewMode.COMMAND_PALETTE) {
             if (isBackspace) {
-                if (!paletteInput.isEmpty()) {
+                if (quickNoteFocused) {
+                    if (!quickNoteInput.isEmpty()) {
+                        quickNoteInput = quickNoteInput.substring(0, quickNoteInput.length() - 1);
+                    }
+                } else if (!paletteInput.isEmpty()) {
                     paletteInput = paletteInput.substring(0, paletteInput.length() - 1);
                     refreshData();
                 }
+                return true;
+            }
+            if (key == InputConstants.KEY_TAB) {
+                quickNoteFocused = !quickNoteFocused;
+                return true;
+            }
+            if (isEnter && quickNoteFocused) {
+                commitEditor(false);
                 return true;
             }
             if (isEnter) {

@@ -416,9 +416,6 @@ final class WmiNotesPanel {
             }
         }
         int slots = Math.max(1, (boxW - 8) / 13);
-        if (shown.isEmpty()) {
-            drawText(g, font, WmiVector.trim(font, WmiText.s("wmi.notes.search_hint"), boxW - 10), x + 5, ry + 3, theme().textMuted);
-        }
         for (int i = 0; i < shown.size() && i < slots; i++) {
             String id = shown.get(i);
             int sx = x + 4 + i * 13;

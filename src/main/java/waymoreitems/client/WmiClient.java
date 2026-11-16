@@ -43,7 +43,11 @@ public final class WmiClient {
     public static final KeyMapping KEY_RECIPES = new KeyMapping("key.wmi.recipes", InputConstants.KEY_R, CATEGORY);
     public static final KeyMapping KEY_USES = new KeyMapping("key.wmi.uses", InputConstants.KEY_U, CATEGORY);
     public static final KeyMapping KEY_TOGGLE_OVERLAY = new KeyMapping("key.wmi.toggle_overlay", InputConstants.KEY_O, CATEGORY);
-    public static final KeyMapping KEY_PALETTE = new KeyMapping("key.wmi.palette", InputConstants.KEY_K, CATEGORY);
+    /**
+     * Fenêtre « Accès rapide » : commandes, note ou objet des Notes. Modifiable aussi dans les paramètres de WMI. Touche
+     * placée sous Échap (code de position, « ² » en AZERTY, « ` » en QWERTY), libre dans Minecraft.
+     */
+    public static final KeyMapping KEY_QUICK = new KeyMapping("key.wmi.quick", InputConstants.KEY_GRAVE, CATEGORY);
     public static final KeyMapping KEY_PIN = new KeyMapping("key.wmi.pin", InputConstants.KEY_J, CATEGORY);
     public static final KeyMapping KEY_POSTIT = new KeyMapping("key.wmi.postit", InputConstants.KEY_N, CATEGORY);
     public static final KeyMapping KEY_SORT = new KeyMapping("key.wmi.sort", InputConstants.KEY_B, CATEGORY);
@@ -85,7 +89,7 @@ public final class WmiClient {
         event.register(KEY_RECIPES);
         event.register(KEY_USES);
         event.register(KEY_TOGGLE_OVERLAY);
-        event.register(KEY_PALETTE);
+        event.register(KEY_QUICK);
         event.register(KEY_PIN);
         event.register(KEY_POSTIT);
         event.register(KEY_SORT);
@@ -147,7 +151,7 @@ public final class WmiClient {
         if (mc.player == null || mc.gui.screen() != null) {
             return;
         }
-        while (KEY_PALETTE.consumeClick()) {
+        while (KEY_QUICK.consumeClick()) {
             OVERLAY.openModal(null, WmiRecipeScreen.ViewMode.COMMAND_PALETTE, "");
         }
         while (KEY_POSTIT.consumeClick()) {

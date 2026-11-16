@@ -40,6 +40,11 @@ abstract class WmiScaledScreen extends Screen {
     /** Dessin de l'écran, en unités de WMI ({@code width}, {@code height} et souris compris). */
     protected abstract void extractUi(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick);
 
+    /** Facteur d'échelle de WMI au dernier dessin (coordonnées du jeu divisées par ce facteur = unités de WMI). */
+    protected float uiFactor() {
+        return uiFactor;
+    }
+
     /** Événement de souris converti en unités de WMI. */
     protected MouseButtonEvent ui(MouseButtonEvent event) {
         return uiFactor == 1.0F ? event : new MouseButtonEvent(event.x() / uiFactor, event.y() / uiFactor, event.buttonInfo());

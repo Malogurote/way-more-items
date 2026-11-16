@@ -126,11 +126,21 @@ final class WmiButtons {
             Runnable onClick
     ) {
         boolean hover = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
+        if ("x".equals(label)) {
+            // Suppression ou fermeture : croix rouge discrète dessinée en aplats (WmiDraw.drawCloseButton)
+            WmiDraw.drawCloseButton(g, x, y, w, h, hover);
+            drawn.add(new QuickButton(x, y, w, h, label, tooltip, onClick, null));
+            return;
+        }
         int bg = (active || hover) ? theme().accentSoft : theme().slotBg;
         int brd = (active || hover) ? theme().accent : theme().innerBorder;
         drawBox(g, x, y, w, h, bg, brd);
-        drawText(g, font, label, x + (w - WmiVector.width(font, label)) / 2, y + (h - 8) / 2,
-                (active || hover) ? theme().accent : theme().textMain);
+        int fg = (active || hover) ? theme().accent : theme().textMain;
+        if ("+".equals(label)) {
+            WmiDraw.drawPlusGlyph(g, x, y, w, h, fg); // croix nette et centrée, comme le « + » des recettes
+        } else {
+            drawText(g, font, label, x + (w - WmiVector.width(font, label)) / 2, y + (h - 8) / 2, fg);
+        }
         drawn.add(new QuickButton(x, y, w, h, label, tooltip, onClick, null));
     }
 

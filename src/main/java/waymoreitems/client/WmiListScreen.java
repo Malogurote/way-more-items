@@ -18,7 +18,7 @@ import java.util.Locale;
 
 /**
  * Fenêtre de liste de WMI (biomes, enchantements), au style de « Paramètres » : panneau flouté, titre, recherche
- * toujours active, liste défilante à la molette ou par l'ascenseur, message de confirmation bref, bouton « Fermer ». Échap ou « Fermer » ramène
+ * toujours active, liste défilante à la molette ou par l'ascenseur, message de confirmation bref, croix de fermeture. Échap ou la croix ramène
  * à l'écran d'origine. Les sous-classes dessinent les lignes et déclarent leurs zones cliquables.
  */
 abstract class WmiListScreen extends WmiScaledScreen {
@@ -114,7 +114,8 @@ abstract class WmiListScreen extends WmiScaledScreen {
         String sub = flashing
                 ? WmiVector.trim(font, flashText, boxW - 30 - WmiVector.width(font, title.getString()))
                 : subtitle();
-        WmiDraw.drawText(g, font, sub, x0 + boxW - 9 - WmiVector.width(font, sub), y0 + 7,
+        int closeX = x0 + boxW - 6 - 14;
+        WmiDraw.drawText(g, font, sub, closeX - 6 - WmiVector.width(font, sub), y0 + 7,
                 flashing ? th.accent : th.textMuted);
 
         int fieldX = x0 + 10;
@@ -123,7 +124,7 @@ abstract class WmiListScreen extends WmiScaledScreen {
         renderToolbar(g, fieldX, y0 + 42, fieldW, mouseX, mouseY);
 
         viewTop = y0 + 42 + toolbarHeight();
-        viewBottom = y0 + boxH - 28;
+        viewBottom = y0 + boxH - 8;
         int maxScroll = Math.max(0, contentHeight - (viewBottom - viewTop));
         scroll = Math.max(0, Math.min(maxScroll, scroll));
         g.enableScissor(x0 + 4, viewTop, x0 + boxW - 4, viewBottom);
@@ -142,9 +143,11 @@ abstract class WmiListScreen extends WmiScaledScreen {
             WmiDraw.bar(g, scrollbarX, thumbY, scrollbarX + SCROLLBAR_W, thumbY + thumbH, hot ? th.accent : th.textMuted);
         }
 
-        int closeW = 70;
-        button(g, x0 + (boxW - closeW) / 2, y0 + boxH - 22, closeW, 16, WmiText.s("wmi.settings.close"), false,
-                mouseX, mouseY, this::onClose);
+        // Fermer : croix rouge en haut à droite, comme les autres fenêtres de WMI
+        int closeY = y0 + 6;
+        WmiDraw.drawCloseButton(g, closeX, closeY, 14, 14,
+                mouseX >= closeX && mouseX < closeX + 14 && mouseY >= closeY && mouseY < closeY + 14);
+        zones.add(new Zone(closeX, closeY, 14, 14, this::onClose, null));
     }
 
     private static final int SCROLLBAR_W = 4;

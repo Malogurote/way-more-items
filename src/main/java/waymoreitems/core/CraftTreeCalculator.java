@@ -245,9 +245,11 @@ public final class CraftTreeCalculator {
         if (alternatives.size() == 1) {
             return alternatives.get(0);
         }
-        // 1. Préférer un objet déjà présent dans le stock ou le surplus du joueur
+        // 1. Préférer un objet déjà présent dans le stock ou le surplus du joueur, jamais un ancêtre (le surplus
+        //    de l'objet visé ne doit pas servir à le refabriquer : câble teint -> câble lavé -> câble teint)
         for (String alt : alternatives) {
-            if (ctx.surplusPool.getOrDefault(alt, 0) > 0 || ctx.availableStock.getOrDefault(alt, 0) > 0) {
+            if (!ancestors.contains(alt)
+                    && (ctx.surplusPool.getOrDefault(alt, 0) > 0 || ctx.availableStock.getOrDefault(alt, 0) > 0)) {
                 return alt;
             }
         }
@@ -287,7 +289,15 @@ public final class CraftTreeCalculator {
             if (isUnpackingRecipe(ctx.index, r, itemId) && !hasInputInStock(ctx, r)) {
                 continue;
             }
+            if (isRoundTrip(ctx.index, r, itemId, ancestors) && !hasInputInStock(ctx, r)) {
+                continue;
+            }
             int score = scoreRecipe(ctx, r, itemId);
+            // Recette de conversion entre variantes (teinture, lavage) qui accepte l'objet lui-même ou un ancêtre :
+            // elle ne fait que tourner en rond, une vraie recette de fabrication passe avant.
+            if (acceptsAncestor(r, ancestors, itemId)) {
+                score -= 400;
+            }
             if (score > bestScore) {
                 bestScore = score;
                 best = r;
@@ -299,6 +309,17 @@ public final class CraftTreeCalculator {
             return null;
         }
         return best;
+    }
+
+    private static boolean acceptsAncestor(RecipeEntry r, Set<String> ancestors, String itemId) {
+        for (RecipeEntry.IngredientSlot slot : r.inputs()) {
+            for (String alt : slot.alternatives()) {
+                if (alt.equals(itemId) || ancestors.contains(alt)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean causesImmediateCycle(RecipeEntry r, Set<String> ancestors) {
@@ -338,6 +359,110 @@ public final class CraftTreeCalculator {
                 if (rev.uses(outputId)) {
                     return true;
                 }
+            }
+        }
+        return false;
+    }
+
+    /** Profondeur et nombre de visites maximaux de la recherche d'allers-retours (garde-fous de performance). */
+    private static final int ROUND_TRIP_DEPTH = 6;
+    private static final int ROUND_TRIP_BUDGET = 4000;
+
+    /**
+     * Vrai si la recette {@code r} est un démontage (un seul objet en entrée, plusieurs exemplaires de l'objet visé
+     * en sortie) d'un objet lui-même fabriqué uniquement avec l'objet visé (ou un ancêtre) : cristal de certus tiré
+     * d'une variante décorative de son bloc, elle-même faite de cristaux. Généralise la décompression directe (bloc
+     * vers lingots) aux chaînes de plusieurs étapes. Si toutes les recettes d'un objet sont de ce genre, il se
+     * récolte dans le monde et devient une matière première. Les recettes de 1 pour 1 (variantes décoratives) ne
+     * sont jamais concernées : dans un cycle pur, seul le sens du démontage désigne la matière d'origine.
+     */
+    private static boolean isRoundTrip(RecipeIndex index, RecipeEntry r, String itemId, Set<String> ancestors) {
+        if (r.inputs().size() != 1 || r.inputs().get(0).count() != 1 || r.outputCount(itemId) < 2) {
+            return false;
+        }
+        Set<String> sources = new HashSet<>(ancestors);
+        sources.add(itemId);
+        Set<String> visiting = new HashSet<>();
+        visiting.add(itemId);
+        return recipeNeeds(index, r, sources, visiting, ROUND_TRIP_DEPTH, new int[]{ROUND_TRIP_BUDGET});
+    }
+
+    /** Vrai si une entrée de {@code r} n'admet que des objets fabriqués uniquement à partir de {@code sources}. */
+    private static boolean recipeNeeds(RecipeIndex index, RecipeEntry r, Set<String> sources, Set<String> visiting,
+                                       int depth, int[] budget) {
+        for (RecipeEntry.IngredientSlot slot : r.inputs()) {
+            if (slot.alternatives().isEmpty()) {
+                continue;
+            }
+            boolean all = true;
+            for (String alt : slot.alternatives()) {
+                if (!madeOnlyFrom(index, alt, sources, visiting, depth - 1, budget)) {
+                    all = false;
+                    break;
+                }
+            }
+            if (all) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Vrai si l'objet {@code x} ne s'obtient qu'à partir de {@code sources} : toutes ses recettes (hors boucles
+     * vers les objets en cours d'examen) en dépendent. Un objet sans recette est naturel : il n'en dépend pas.
+     */
+    private static boolean madeOnlyFrom(RecipeIndex index, String x, Set<String> sources, Set<String> visiting,
+                                        int depth, int[] budget) {
+        if (sources.contains(x)) {
+            return true;
+        }
+        if (depth <= 0 || visiting.contains(x) || --budget[0] < 0) {
+            return false;
+        }
+        List<RecipeEntry> recipes = index.recipesForOutput(x);
+        if (recipes.isEmpty()) {
+            return false;
+        }
+        visiting.add(x);
+        try {
+            return allRecipesNeed(index, recipes, sources, visiting, depth, budget);
+        } finally {
+            visiting.remove(x);
+        }
+    }
+
+    /** Vrai si au moins une recette compte (hors boucles) et que toutes celles qui comptent dépendent de {@code sources}. */
+    private static boolean allRecipesNeed(RecipeIndex index, List<RecipeEntry> recipes, Set<String> sources,
+                                          Set<String> visiting, int depth, int[] budget) {
+        int counted = 0;
+        for (RecipeEntry r : recipes) {
+            if (loopsBack(r, sources, visiting)) {
+                continue;
+            }
+            counted++;
+            if (!recipeNeeds(index, r, sources, visiting, depth, budget)) {
+                return false;
+            }
+        }
+        return counted > 0;
+    }
+
+    /** Vrai si une entrée de {@code r} ne renvoie qu'à des objets en cours d'examen (boucle sans nouvelle matière). */
+    private static boolean loopsBack(RecipeEntry r, Set<String> sources, Set<String> visiting) {
+        for (RecipeEntry.IngredientSlot slot : r.inputs()) {
+            if (slot.alternatives().isEmpty()) {
+                continue;
+            }
+            boolean all = true;
+            for (String alt : slot.alternatives()) {
+                if (sources.contains(alt) || !visiting.contains(alt)) {
+                    all = false;
+                    break;
+                }
+            }
+            if (all) {
+                return true;
             }
         }
         return false;

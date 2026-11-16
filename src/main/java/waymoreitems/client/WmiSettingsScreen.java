@@ -3,17 +3,21 @@ package waymoreitems.client;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import net.neoforged.neoforge.client.settings.KeyModifier;
 import org.jspecify.annotations.Nullable;
 import waymoreitems.core.ThemePalette;
 
 /**
  * Fenêtre « Paramètres » de Way More Items : chaque réglage s'applique et s'enregistre immédiatement
- * dans {@code config/wmi-client.properties}. Échap ou « Fermer » ramène à l'écran d'origine.
+ * dans {@code config/wmi-client.properties}. Échap ou la croix de fermeture ramène à l'écran d'origine.
  */
 public final class WmiSettingsScreen extends WmiScaledScreen {
     private static final int BOX_W = 272;
@@ -26,6 +30,8 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
     private int draggingRow = -1;
     /** Onglet affiché : 0 = Général, 1 = Widget (heure, biome, jour), 2 = Notes. */
     private int tab = 0;
+    /** Attente de la touche de la fenêtre « Accès rapide » (Échap annule). */
+    private boolean capturingQuickKey = false;
 
     private record Zone(int x, int y, int w, int h, Runnable left, @Nullable Runnable right) {
         boolean contains(double mx, double my) {
@@ -67,8 +73,8 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
         sliders.clear();
 
         boolean custom = th.isCustom();
-        int rows = tab == 3 ? 1 : tab == 2 ? 4 : tab == 1 ? 7 : (custom ? 13 : 10);
-        int boxH = 30 + 22 + rows * ROW_H + 30;
+        int rows = tab == 3 ? 1 : tab == 2 ? 4 : tab == 1 ? 7 : (custom ? 14 : 11);
+        int boxH = 30 + 22 + rows * ROW_H + 8;
         int x0 = (width - BOX_W) / 2;
         int y0 = (height - boxH) / 2;
         WmiDraw.drawFrostedPanel(g, x0, y0, BOX_W, boxH);
@@ -92,9 +98,12 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
             renderGeneralTab(g, o, th, x0, y, mouseX, mouseY);
         }
 
-        // Fermer
-        int closeW = 70;
-        button(g, o, x0 + (BOX_W - closeW) / 2, y0 + boxH - 24, closeW, 16, WmiText.s("wmi.settings.close"), false, mouseX, mouseY, this::onClose, null);
+        // Fermer : croix rouge en haut à droite, comme les autres fenêtres de WMI
+        int closeX = x0 + BOX_W - 6 - 14;
+        int closeY = y0 + 6;
+        WmiDraw.drawCloseButton(g, closeX, closeY, 14, 14,
+                mouseX >= closeX && mouseX < closeX + 14 && mouseY >= closeY && mouseY < closeY + 14);
+        zones.add(new Zone(closeX, closeY, 14, 14, this::onClose, null));
     }
 
     /** Onglet HUD : éléments de WMI affichés sur l'écran de jeu, hors inventaire. */
@@ -253,6 +262,37 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
         toggle(g, o, ctrlX, y, ctrlW, WmiText.s("wmi.settings.item_names." + (cfg.englishNames() ? "english" : "game")), cfg.englishNames(), mouseX, mouseY,
                 () -> cfg.setEnglishNames(!cfg.englishNames()));
         y += ROW_H;
+
+        // Touche de la fenêtre « Accès rapide » : clic puis touche voulue ; clic droit : touche par défaut (²)
+        row(g, o, WmiText.s("wmi.settings.quick_key"), labelX, y);
+        String keyLabel = capturingQuickKey ? WmiText.s("wmi.settings.quick_key.press")
+                : WmiClient.KEY_QUICK.getTranslatedKeyMessage().getString();
+        button(g, o, ctrlX, y, ctrlW, 15, keyLabel, capturingQuickKey, mouseX, mouseY,
+                () -> capturingQuickKey = !capturingQuickKey,
+                () -> {
+                    capturingQuickKey = false;
+                    setQuickKey(WmiClient.KEY_QUICK.getDefaultKey());
+                });
+        y += ROW_H;
+    }
+
+    /** La touche passe par la liste des contrôles de Minecraft : même réglage que dans « Commandes », enregistré dans options.txt. */
+    private static void setQuickKey(InputConstants.Key key) {
+        WmiClient.KEY_QUICK.setKeyModifierAndCode(KeyModifier.NONE, key);
+        KeyMapping.resetMapping();
+        Minecraft.getInstance().options.save();
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (capturingQuickKey) {
+            capturingQuickKey = false;
+            if (!event.isEscape()) {
+                setQuickKey(InputConstants.getKey(event));
+            }
+            return true;
+        }
+        return super.keyPressed(event);
     }
 
     /** Barre de couleurs dégradée ({@code colorAt} : position de 0 à 1 vers 0xRRGGBB) avec repère de la valeur. */

@@ -172,6 +172,60 @@ public final class WmiDraw {
         g.fill(x + w - 1, y, x + w, y + h, color);
     }
 
+    /** Rouge discret des boutons de fermeture et de suppression : croix au repos, fond et contour translucides au survol. */
+    private static final int CLOSE_RED = 0xD9F87171;
+    private static final int CLOSE_RED_HOVER = 0xFFFCA5A5;
+    private static final int CLOSE_BG_HOVER = 0x40EF4444;
+    private static final int CLOSE_BORDER_HOVER = 0xB3EF4444;
+
+    /**
+     * Bouton de fermeture (ou de suppression) : case du thème, croix rouge discrète dessinée en aplats d'une unité
+     * le long des deux diagonales, symétrique au centre (à la manière des pictogrammes du vanilla), au lieu d'un
+     * « x » de police décalé selon l'échelle.
+     */
+    public static void drawCloseButton(GuiGraphicsExtractor g, int x, int y, int w, int h, boolean hover) {
+        drawBox(g, x, y, w, h, hover ? CLOSE_BG_HOVER : theme().slotBg, hover ? CLOSE_BORDER_HOVER : theme().innerBorder);
+        int side = Math.min(w, h);
+        int n = side >= 14 ? side - 8 : Math.max(3, side - 4); // petit bouton : marge de 2, croix de 5 dans 9
+        int cx = x + (w - n) / 2;
+        int cy = y + (h - n) / 2;
+        int col = hover ? CLOSE_RED_HOVER : CLOSE_RED;
+        for (int i = 0; i < n; i++) {
+            g.fill(cx + i, cy + i, cx + i + 1, cy + i + 1, col);
+            int j = n - 1 - i;
+            if (j != i) {
+                g.fill(cx + j, cy + i, cx + j + 1, cy + i + 1, col);
+            }
+        }
+    }
+
+    /**
+     * Pictogramme « + » centré dans le rectangle donné, en deux aplats (traits de 2 si la croix est paire, de 1
+     * sinon), à la place d'un « + » de police décalé selon l'échelle.
+     */
+    public static void drawPlusGlyph(GuiGraphicsExtractor g, int x, int y, int w, int h, int color) {
+        // Grand bouton (14 et plus) : branches de 8, trait de 2 ; petit bouton : trait fin de 1, branches impaires
+        // (un seul pixel au centre) avec une marge de 2, pour rester net et lisible.
+        int side = Math.min(w, h);
+        int n;
+        int t;
+        if (side >= 14) {
+            n = side - 6;
+            n -= n % 2;
+            t = 2;
+        } else {
+            n = Math.max(3, side - 4);
+            n -= (n + 1) % 2;
+            t = 1;
+        }
+        int ax = x + (w - n) / 2;
+        int ay = y + (h - n) / 2;
+        int tx = x + (w - t) / 2;
+        int ty = y + (h - t) / 2;
+        g.fill(ax, ty, ax + n, ty + t, color);
+        g.fill(tx, ay, tx + t, ay + n, color);
+    }
+
     public static void drawText(GuiGraphicsExtractor g, Font font, String text, int x, int y, int color) {
         if (WmiVector.enabled()) {
             // Police lissée (Roboto) : pas d'ombre portée, elle épaissit les lettres fines.
@@ -209,11 +263,14 @@ public final class WmiDraw {
 
     /** Objet réduit à {@code size} unités (16 d'origine), placé en haut à gauche de {@code (x, y)}. */
     public static void drawSmallItem(GuiGraphicsExtractor g, ItemStack stack, int x, int y, int size) {
+        // Some models are flagged as oversized in GUI and would spill out of the small box: clip them.
+        g.enableScissor(x, y, x + size, y + size);
         g.pose().pushMatrix();
         g.pose().translate(x, y);
         g.pose().scale(size / 16.0F, size / 16.0F);
         g.fakeItem(stack, 0, 0);
         g.pose().popMatrix();
+        g.disableScissor();
     }
 
     /** Case à cocher dessinée de 8 unités (remplace les crochets « [ ] » et « [x] »). */
