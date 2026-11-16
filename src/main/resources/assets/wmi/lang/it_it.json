@@ -344,6 +344,8 @@
   "wmi.tree.step_count": "%s passaggio",
   "wmi.tree.step_count.many": "%s passaggi",
   "wmi.tree.machine_seconds": "%s s di macchina",
+  "wmi.tree.recipe_choice_tip": "Altra ricetta per questo passaggio, memorizzata per questo oggetto in tutti gli alberi (clic destro: scelta automatica)",
+  "wmi.tree.recipe_choice_tip_chosen": "Ricetta scelta per questo oggetto in tutti gli alberi (frecce: altra ricetta, clic destro: torna alla scelta automatica)",
   "wmi.recipe.give_count": "Dai ×%s",
   "wmi.recipe.give_tip": "Aggiunge una pila al tuo inventario",
   "wmi.cmd.prefix": "[WMI] %s",

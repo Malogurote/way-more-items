@@ -344,6 +344,8 @@
   "wmi.tree.step_count": "%s step",
   "wmi.tree.step_count.many": "%s steps",
   "wmi.tree.machine_seconds": "%s s of machine time",
+  "wmi.tree.recipe_choice_tip": "Other recipe for this step, remembered for this item in every tree (right click: automatic choice)",
+  "wmi.tree.recipe_choice_tip_chosen": "Recipe chosen for this item in every tree (arrows: other recipe, right click: back to the automatic choice)",
   "wmi.recipe.give_count": "Give ×%s",
   "wmi.recipe.give_tip": "Adds a stack to your inventory",
   "wmi.cmd.prefix": "[WMI] %s",

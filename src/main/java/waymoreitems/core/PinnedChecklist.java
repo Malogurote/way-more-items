@@ -26,6 +26,8 @@ public final class PinnedChecklist {
     private final Set<String> completedKeys = new HashSet<>();
     /** Branches dépliées par le joueur (clé de ligne, voir {@link Line#key()}). */
     private final Set<String> expanded = new HashSet<>();
+    /** Recettes choisies par le joueur dans l'arbre, valables pour tous les arbres (objectifs compris). */
+    private final RecipePreferences recipeChoices = new RecipePreferences();
     private RecipeIndex index;
 
     /**
@@ -125,7 +127,9 @@ public final class PinnedChecklist {
 
     private void rebuildTree(Goal g, CraftTreeCalculator.CraftNode fallback) {
         if (index != null && !index.recipesForOutput(g.itemId).isEmpty()) {
-            CraftTreeCalculator.CraftPlan plan = CraftTreeCalculator.plan(index, g.itemId, g.count, Map.of(), g.preferred);
+            Map<String, String> pref = new LinkedHashMap<>(recipeChoices.asMap());
+            pref.putAll(g.preferred);
+            CraftTreeCalculator.CraftPlan plan = CraftTreeCalculator.plan(index, g.itemId, g.count, Map.of(), pref);
             g.tree = freeze(plan.root());
         } else if (fallback != null) {
             g.tree = freeze(fallback);
@@ -153,6 +157,50 @@ public final class PinnedChecklist {
             }
         }
         return new TreeNode(node.itemId(), node.needed(), new ArrayList<>(alts), node.children());
+    }
+
+    // ==================== CHOIX DE RECETTES ====================
+
+    /** Recettes choisies par le joueur pour les étapes de l'arbre (à enregistrer avec les réglages). */
+    public RecipePreferences recipeChoices() {
+        return recipeChoices;
+    }
+
+    /**
+     * Choisit {@code recipeId} pour fabriquer {@code itemId} dans tous les arbres ({@code null} : choix automatique).
+     * Les objectifs des Notes dont l'arbre passe par cet objet suivent le choix et sont recalculés.
+     *
+     * @return vrai si le choix a changé
+     */
+    public boolean chooseRecipe(String itemId, String recipeId) {
+        if (!recipeChoices.set(itemId, recipeId)) {
+            return false;
+        }
+        for (Goal g : goals) {
+            if (!g.craft || !(g.preferred.containsKey(itemId) || (g.tree != null && contains(g.tree, itemId)))) {
+                continue;
+            }
+            if (recipeId == null || recipeId.isEmpty()) {
+                g.preferred.remove(itemId);
+            } else {
+                g.preferred.put(itemId, recipeId);
+            }
+            rebuildTree(g, null);
+        }
+        refreshCompletion();
+        return true;
+    }
+
+    private static boolean contains(TreeNode node, String itemId) {
+        if (node.itemId().equals(itemId)) {
+            return true;
+        }
+        for (TreeNode child : node.children()) {
+            if (contains(child, itemId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ==================== OBJECTIFS ====================
@@ -269,6 +317,11 @@ public final class PinnedChecklist {
             goals.remove(goalIndex);
             refreshCompletion();
         }
+    }
+
+    /** Arbre figé de l'objectif de rang {@code goalIndex} ({@code null} pour un objet libre ou sans arbre). */
+    TreeNode goalTree(int goalIndex) {
+        return goalIndex < 0 || goalIndex >= goals.size() ? null : goals.get(goalIndex).tree;
     }
 
     public int goalCount() {

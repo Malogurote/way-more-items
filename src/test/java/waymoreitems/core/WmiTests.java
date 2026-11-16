@@ -827,6 +827,7 @@ public final class WmiTests {
         testPinRecipeInputs();
         testThemePalette();
         GuiLayoutTests.run(WmiTests::check);
+        CraftTreeChoiceTests.run(WmiTests::check);
         LangTests.run(WmiTests::check);
 
         System.out.println("WmiTests : " + checks + " verifications, " + failures + " echec(s).");

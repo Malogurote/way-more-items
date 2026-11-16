@@ -183,6 +183,7 @@ public final class WmiSettings {
                 }
             }
         }
+        checklist.recipeChoices().load(props.string("treeRecipes", ""));
         if (checklist.goalCount() == 0) {
             try {
                 checklist.loadGoals(props.string("savedGoals", ""));
@@ -304,6 +305,7 @@ public final class WmiSettings {
         props.setProperty("savedNotes", notesText.toString());
         lastSavedGoals = checklist.serializeGoals();
         props.setProperty("savedGoals", lastSavedGoals);
+        props.setProperty("treeRecipes", checklist.recipeChoices().serialize());
         props.setProperty("notesTreeDepth", Integer.toString(notesTreeDepth));
         props.setProperty("englishNames", Boolean.toString(englishNames));
         props.setProperty("notesShowEmpty", Boolean.toString(notesShowEmpty));
