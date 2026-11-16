@@ -376,15 +376,24 @@ final class WmiNotesPanel {
         if (l.expandable()) {
             hudText(g, font, l.expanded() ? "-" : "+", 0, 0, 0.75, ix - 6, baseline, theme().textMuted);
         }
+        if (st.isEmpty()) {
+            WmiFluids.draw(g, l.itemId(), ix, ry + 1, 8);
+        }
         if (!st.isEmpty()) {
             drawSmallItem(g, st, ix, ry + 1, 8);
         }
         boolean removable = inScreen && l.depth() == 0;
         int right = x + boxW - (removable ? 16 : 5);
-        String count = l.kind() == PinnedChecklist.LineKind.GOAL ? "×" + l.required() : l.current() + "/" + l.required();
+        String count;
+        if (waymoreitems.core.IngredientRef.isFluid(l.itemId())) {
+            String req = waymoreitems.core.IngredientRef.formatAmount(l.itemId(), l.required());
+            count = l.kind() == PinnedChecklist.LineKind.GOAL ? "×" + req : WmiFluids.compactAmount(l.current()) + "/" + req;
+        } else {
+            count = l.kind() == PinnedChecklist.LineKind.GOAL ? "×" + l.required() : l.current() + "/" + l.required();
+        }
         int countW = hudWidth(font, count, 0, 0);
         int nameX = ix + 10;
-        String name = !st.isEmpty() ? WmiNames.of(st) : l.itemId();
+        String name = !st.isEmpty() ? WmiNames.of(st) : WmiFluids.displayName(l.itemId());
         name = hudTrim(font, name, 0, 0, Math.max(10, right - countW - 4 - nameX));
         hudText(g, font, name, 0, 0, 0.75, nameX, baseline, done ? theme().green : theme().textMain);
         hudText(g, font, count, 0, 0, 0.75, right - countW, baseline, done ? theme().green : theme().textMuted);
@@ -470,8 +479,10 @@ final class WmiNotesPanel {
             ItemStack st = WmiClientIndex.stackFor(id);
             if (!st.isEmpty()) {
                 drawSmallItem(g, st, sx, ry, 12);
+            } else {
+                WmiFluids.draw(g, id, sx, ry, 12);
             }
-            o.buttons.drawn.add(new QuickButton(sx, ry, 12, 12, "", !st.isEmpty() ? WmiNames.of(st) : id,
+            o.buttons.drawn.add(new QuickButton(sx, ry, 12, 12, "", !st.isEmpty() ? WmiNames.of(st) : WmiFluids.displayName(id),
                     () -> notesPickedItem = id, null));
         }
 

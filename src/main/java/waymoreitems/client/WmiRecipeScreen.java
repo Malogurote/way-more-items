@@ -91,6 +91,8 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
     private boolean quickNoteFocused = false;
 
     private String hoveredItemId;
+    /** Quantité de la case survolée (millibuckets pour un fluide), 0 si inconnue. */
+    private int hoveredAmount;
     private final List<ClickableZone> clickZones = new ArrayList<>();
 
     private record ClickableZone(int x, int y, int w, int h, Runnable action) {
@@ -196,6 +198,7 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             graphics.fill(0, 0, width, height, 0x550F172A);
         }
         hoveredItemId = null;
+        hoveredAmount = 0;
         clickZones.clear();
 
         // Saisie de texte du système (SDL3) : sans startTextInput, aucun caractère n'arrive à charTyped.
@@ -251,6 +254,8 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             ItemStack st = WmiClientIndex.stackFor(hoveredItemId);
             if (!st.isEmpty()) {
                 WmiNames.tooltip(graphics, font, st, mouseX, mouseY);
+            } else {
+                WmiFluids.tooltip(graphics, font, hoveredItemId, hoveredAmount, mouseX, mouseY);
             }
         }
     }
@@ -550,9 +555,12 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
                 ItemStack withCount = count > 1 ? st.copyWithCount(count) : st;
                 g.fakeItem(withCount, x, y);
                 g.itemDecorations(font, withCount, x, y);
+            } else if (WmiFluids.draw(g, itemId, x, y, 16)) {
+                WmiFluids.drawAmount(g, font, count, x, y);
             }
             if (hover) {
                 hoveredItemId = itemId;
+                hoveredAmount = count;
             }
         }
     }
@@ -743,9 +751,12 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             ItemStack withCount = count > 1 ? st.copyWithCount(Math.min(count, 999)) : st;
             g.fakeItem(withCount, x + 2, y + 2);
             g.itemDecorations(font, withCount, x + 2, y + 2);
+        } else if (WmiFluids.draw(g, itemId, x + 2, y + 2, 16)) {
+            WmiFluids.drawAmount(g, font, count, x + 2, y + 2);
         }
         if (hover) {
             hoveredItemId = itemId;
+            hoveredAmount = count;
         }
     }
 
@@ -1191,6 +1202,8 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             ItemStack st = WmiClientIndex.stackFor(id);
             if (!st.isEmpty()) {
                 WmiDraw.drawSmallItem(g, st, sx, ry, 12);
+            } else {
+                WmiFluids.draw(g, id, sx, ry, 12);
             }
             if (hover) {
                 hovered = id;
@@ -1224,6 +1237,8 @@ public final class WmiRecipeScreen extends WmiScaledScreen {
             ItemStack st = WmiClientIndex.stackFor(hovered);
             if (!st.isEmpty()) {
                 WmiNames.tooltip(g, font, st, mouseX, mouseY);
+            } else {
+                WmiFluids.tooltip(g, font, hovered, 0, mouseX, mouseY);
             }
         }
     }

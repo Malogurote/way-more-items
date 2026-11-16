@@ -224,10 +224,16 @@ public final class WmiOverlay {
                 map.merge(id, st.getCount(), Integer::sum);
             }
         }
+        // Fluides des seaux pleins, comptés en millibuckets (Notes, fabricabilité)
+        WmiClientIndex.peek().fluidsInContainers(map).forEach(map::putIfAbsent);
         return map;
     }
 
     public void giveItemToPlayer(String itemId, int count) {
+        // Un fluide ne se donne pas : seuls les objets passent par le serveur
+        if (!waymoreitems.core.IngredientRef.isItem(itemId)) {
+            return;
+        }
         // Outils, armes, armures, seaux... : jamais plus que la taille de pile de l'objet (1 pour les non empilables)
         ItemStack st = WmiClientIndex.stackFor(itemId);
         int capped = st.isEmpty() ? count : Math.max(1, Math.min(count, st.getMaxStackSize()));
@@ -405,6 +411,8 @@ public final class WmiOverlay {
             ItemStack st = WmiClientIndex.stackFor(panel.hoveredOverlayItemId);
             if (!st.isEmpty()) {
                 WmiNames.tooltip(g, font, st, mouseX, mouseY);
+                tooltipSet = true;
+            } else if (WmiFluids.tooltip(g, font, panel.hoveredOverlayItemId, 0, mouseX, mouseY)) {
                 tooltipSet = true;
             }
         } else {

@@ -281,6 +281,8 @@ public final class WmiSettingsScreen extends WmiScaledScreen {
                 () -> set(() -> s.catalogSort = WmiSettings.CatalogSort.MOD)));
         r.add(row(Tab.CATALOG, "display", "hide_no_recipe", toggle(s.hideNoRecipe, v -> set(() -> s.hideNoRecipe = v)),
                 () -> set(() -> s.hideNoRecipe = false)));
+        r.add(row(Tab.CATALOG, "display", "hide_fluids", toggle(s.hideFluids, v -> set(() -> s.hideFluids = v)),
+                () -> set(() -> s.hideFluids = false)));
         r.add(row(Tab.CATALOG, "search", "clear_search", toggle(s.clearSearchOnClose, v -> set(() -> s.clearSearchOnClose = v)),
                 () -> set(() -> s.clearSearchOnClose = false)));
 

@@ -137,6 +137,10 @@ public final class CraftTreeCalculator {
         Context(RecipeIndex index, Map<String, Integer> initialInventory, Map<String, String> preferredRecipes) {
             this.index = index;
             this.availableStock = new HashMap<>(initialInventory);
+            // Fluides des contenants pleins (seaux) comptés comme stock, sauf s'ils sont déjà donnés explicitement
+            for (Map.Entry<String, Integer> f : index.fluidsInContainers(initialInventory).entrySet()) {
+                this.availableStock.putIfAbsent(f.getKey(), f.getValue());
+            }
             this.preferredRecipes = preferredRecipes;
         }
 
@@ -283,6 +287,10 @@ public final class CraftTreeCalculator {
         int bestScore = Integer.MIN_VALUE;
 
         for (RecipeEntry r : candidates) {
+            // Remplir ou vider un seau n'est pas une étape de fabrication : le fluide reste une ressource de base
+            if (r.isFluidContainerRecipe()) {
+                continue;
+            }
             if (causesImmediateCycle(r, ancestors)) {
                 continue;
             }
